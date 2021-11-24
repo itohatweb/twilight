@@ -17,6 +17,8 @@ pub enum ResponseType {
     UpdateMessage = 7,
     /// Respond to an autocomplete interaction with suggested choices.
     ApplicationCommandAutocompleteResult = 8,
+    /// Respond with a modal for the user to fill out.
+    Modal = 9,
 }
 
 impl ResponseType {
@@ -45,6 +47,7 @@ impl ResponseType {
             Self::DeferredUpdateMessage => "DeferredUpdateMessage",
             Self::UpdateMessage => "UpdateMessage",
             Self::ApplicationCommandAutocompleteResult => "ApplicationCommandAutocompleteResult",
+            Self::Modal => "Modal",
         }
     }
 }
@@ -76,6 +79,7 @@ mod tests {
     const_assert_eq!(6, ResponseType::DeferredUpdateMessage as u8);
     const_assert_eq!(7, ResponseType::UpdateMessage as u8);
     const_assert_eq!(8, ResponseType::ApplicationCommandAutocompleteResult as u8);
+    const_assert_eq!(9, ResponseType::Modal as u8);
 
     #[test]
     fn test_name() {
@@ -97,5 +101,6 @@ mod tests {
             "ApplicationCommandAutocompleteResult",
             ResponseType::ApplicationCommandAutocompleteResult.name()
         );
+        assert_eq!("Modal", ResponseType::Modal.name());
     }
 }

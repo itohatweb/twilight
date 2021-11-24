@@ -2,10 +2,12 @@
 
 pub mod application_command;
 pub mod message_component;
+pub mod modal;
 
 mod interaction_type;
 mod ping;
 
+use self::modal::ModalSubmitInteraction;
 pub use self::{
     application_command::ApplicationCommand, interaction_type::InteractionType,
     message_component::MessageComponentInteraction, ping::Ping,
@@ -42,6 +44,8 @@ pub enum Interaction {
     ApplicationCommandAutocomplete(Box<ApplicationCommand>),
     /// Message component variant.
     MessageComponent(Box<MessageComponentInteraction>),
+    /// Modal submit variant.
+    ModalSubmit(Box<ModalSubmitInteraction>),
 }
 
 impl Interaction {
@@ -52,6 +56,7 @@ impl Interaction {
                 inner.guild_id
             }
             Self::MessageComponent(inner) => inner.guild_id,
+            Self::ModalSubmit(inner) => inner.guild_id,
         }
     }
 
@@ -63,6 +68,7 @@ impl Interaction {
                 command.id
             }
             Self::MessageComponent(component) => component.id,
+            Self::ModalSubmit(modal) => modal.id,
         }
     }
 }
@@ -290,6 +296,32 @@ impl<'de> Visitor<'de> for InteractionVisitor {
                     kind,
                     member,
                     message,
+                    token,
+                    user,
+                }))
+            }
+            InteractionType::ModalSubmit => {
+                let channel_id = channel_id.ok_or_else(|| DeError::missing_field("channel_id"))?;
+                let data = data
+                    .ok_or_else(|| DeError::missing_field("data"))?
+                    .deserialize_into()
+                    .map_err(|e| {
+                        println!("{}", e);
+                        DeError::custom("expected MessageComponentInteractionData struct")
+                    })?;
+
+                let guild_id = guild_id.unwrap_or_default();
+                let member = member.unwrap_or_default();
+                let user = user.unwrap_or_default();
+
+                Self::Value::ModalSubmit(Box::new(ModalSubmitInteraction {
+                    application_id,
+                    channel_id,
+                    data,
+                    guild_id,
+                    id,
+                    kind,
+                    member,
                     token,
                     user,
                 }))

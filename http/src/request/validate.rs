@@ -687,6 +687,10 @@ fn component_inner(component: &Component) -> Result<(), ComponentValidationError
                 }
             }
         }
+        // TODO: more validations
+        Component::InputText(text_input) => {
+            component_custom_id(&text_input.custom_id)?;
+        }
     }
 
     Ok(())

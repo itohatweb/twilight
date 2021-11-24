@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 pub(super) enum CallbackDataEnvelope {
     Autocomplete(Autocomplete),
     Messages(CallbackData),
+    Modal(ModalData),
 }
 
 /// Optional extra data sent when responding to an [`Interaction`] of type
@@ -50,6 +51,26 @@ pub struct CallbackData {
 pub struct Autocomplete {
     /// List of autocomplete alternatives.
     pub choices: Vec<CommandOptionChoice>,
+}
+
+/// Modal response to an [`Interaction::ApplicationCommand`] or [`Interaction::MessageComponent`].
+///
+/// This is used when intending to prompt the user for a modal.
+///
+/// [`Interaction::ApplicationCommand`]: crate::application::interaction::Interaction::ApplicationCommand
+/// [`Interaction::MessageComponent`]: crate::application::interaction::Interaction::MessageComponent
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct ModalData {
+    /// User defined identifier for the button.
+    pub custom_id: String,
+    /// The title of the modal.
+    pub title: String,
+    /// List of components in the action row.
+    ///
+    /// This field only allows following [`Component`]s:
+    ///
+    /// - [`Component::InputText`]
+    pub components: Vec<Component>,
 }
 
 #[cfg(test)]

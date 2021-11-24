@@ -4,7 +4,8 @@ mod callback_data;
 mod response_type;
 
 pub use self::{
-    callback_data::Autocomplete, callback_data::CallbackData, response_type::ResponseType,
+    callback_data::Autocomplete, callback_data::CallbackData, callback_data::ModalData,
+    response_type::ResponseType,
 };
 
 use callback_data::CallbackDataEnvelope;
@@ -36,6 +37,8 @@ pub enum InteractionResponse {
     UpdateMessage(CallbackData),
     /// Autocomplete results.
     Autocomplete(Autocomplete),
+    /// Respond with a modal for the user to fill out.
+    Modal(ModalData),
 }
 
 impl InteractionResponse {
@@ -71,6 +74,7 @@ impl InteractionResponse {
             }
             Self::DeferredUpdateMessage => ResponseType::DeferredUpdateMessage,
             Self::UpdateMessage(_) => ResponseType::UpdateMessage,
+            Self::Modal(_) => ResponseType::Modal,
         }
     }
 }
@@ -193,6 +197,14 @@ impl Serialize for InteractionResponse {
             Self::ChannelMessageWithSource(data)
             | Self::DeferredChannelMessageWithSource(data)
             | Self::UpdateMessage(data) => {
+                let mut state = serializer.serialize_struct("InteractionResponse", 2)?;
+
+                state.serialize_field("type", &self.kind())?;
+                state.serialize_field("data", &data)?;
+
+                state.end()
+            }
+            Self::Modal(data) => {
                 let mut state = serializer.serialize_struct("InteractionResponse", 2)?;
 
                 state.serialize_field("type", &self.kind())?;
