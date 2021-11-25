@@ -61,11 +61,11 @@ pub struct Autocomplete {
 /// [`Interaction::MessageComponent`]: crate::application::interaction::Interaction::MessageComponent
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ModalData {
-    /// User defined identifier for the button.
+    /// User defined identifier for the modal.
     pub custom_id: String,
     /// The title of the modal.
     pub title: String,
-    /// List of components in the action row.
+    /// List of components to include in the modal.
     ///
     /// This field only allows following [`Component`]s:
     ///
