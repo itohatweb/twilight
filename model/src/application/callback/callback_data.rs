@@ -31,18 +31,18 @@ pub(super) struct CallbackDataHolder {
 }
 
 impl CallbackDataHolder {
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_response(self, kind: ResponseType) -> Result<InteractionResponse, String> {
         match kind {
-            ResponseType::Pong => Err(self.to_error(kind)),
-            ResponseType::DeferredUpdateMessage => Err(self.to_error(kind)),
+            ResponseType::Pong | ResponseType::DeferredUpdateMessage => Err(self.to_error(kind)),
             ResponseType::ChannelMessageWithSource => Ok(
-                InteractionResponse::ChannelMessageWithSource(self.to_callback_data()?),
+                InteractionResponse::ChannelMessageWithSource(self.to_callback_data()),
             ),
             ResponseType::DeferredChannelMessageWithSource => Ok(
-                InteractionResponse::DeferredChannelMessageWithSource(self.to_callback_data()?),
+                InteractionResponse::DeferredChannelMessageWithSource(self.to_callback_data()),
             ),
             ResponseType::UpdateMessage => Ok(InteractionResponse::UpdateMessage(
-                self.to_callback_data()?,
+                self.to_callback_data(),
             )),
             ResponseType::ApplicationCommandAutocompleteResult => {
                 Ok(InteractionResponse::Autocomplete(self.to_auto_complete()?))
@@ -51,17 +51,19 @@ impl CallbackDataHolder {
         }
     }
 
-    fn to_callback_data(self) -> Result<CallbackData, String> {
-        Ok(CallbackData {
+    #[allow(clippy::wrong_self_convention)]
+    fn to_callback_data(self) -> CallbackData {
+        CallbackData {
             allowed_mentions: self.allowed_mentions,
             components: self.components,
             content: self.content,
-            embeds: self.embeds.unwrap_or(Vec::new()),
+            embeds: self.embeds.unwrap_or_default(),
             flags: self.flags,
             tts: self.tts,
-        })
+        }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn to_auto_complete(self) -> Result<Autocomplete, String> {
         if self.choices.is_none() {
             return Err(self.to_error(ResponseType::ApplicationCommandAutocompleteResult));
@@ -72,6 +74,7 @@ impl CallbackDataHolder {
         })
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn to_modal(self) -> Result<ModalData, String> {
         // let custom_id = self.custom_id.ok_or_else(|| self.to_error(ResponseType::Modal))?;
         // let title = self.title.ok_or_else(|| self.to_error(ResponseType::Modal))?;
