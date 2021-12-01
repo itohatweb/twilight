@@ -41,9 +41,9 @@ impl CallbackDataHolder {
             ResponseType::DeferredChannelMessageWithSource => Ok(
                 InteractionResponse::DeferredChannelMessageWithSource(self.to_callback_data()),
             ),
-            ResponseType::UpdateMessage => Ok(InteractionResponse::UpdateMessage(
-                self.to_callback_data(),
-            )),
+            ResponseType::UpdateMessage => {
+                Ok(InteractionResponse::UpdateMessage(self.to_callback_data()))
+            }
             ResponseType::ApplicationCommandAutocompleteResult => {
                 Ok(InteractionResponse::Autocomplete(self.to_auto_complete()?))
             }
