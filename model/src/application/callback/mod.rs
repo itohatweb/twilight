@@ -292,7 +292,7 @@ mod tests {
             ResponseType::DeferredUpdateMessage
         );
         assert_eq!(
-            InteractionResponse::UpdateMessage(callback.clone()).kind(),
+            InteractionResponse::UpdateMessage(callback).kind(),
             ResponseType::UpdateMessage
         );
         assert_eq!(
@@ -473,6 +473,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn test_modal() {
         let value = InteractionResponse::Modal(ModalData {
             custom_id: "modal-1".to_owned(),
