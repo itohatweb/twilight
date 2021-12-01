@@ -7,12 +7,93 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::{InteractionResponse, ResponseType};
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub(super) enum CallbackDataEnvelope {
     Autocomplete(Autocomplete),
     Messages(CallbackData),
     Modal(ModalData),
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct CallbackDataHolder {
+    allowed_mentions: Option<AllowedMentions>,
+    components: Option<Vec<Component>>,
+    content: Option<String>,
+    embeds: Option<Vec<Embed>>,
+    flags: Option<MessageFlags>,
+    tts: Option<bool>,
+    choices: Option<Vec<CommandOptionChoice>>,
+    custom_id: Option<String>,
+    title: Option<String>,
+}
+
+impl CallbackDataHolder {
+    pub fn to_response(self, kind: ResponseType) -> Result<InteractionResponse, String> {
+        match kind {
+            ResponseType::Pong => Err(self.to_error(kind)),
+            ResponseType::DeferredUpdateMessage => Err(self.to_error(kind)),
+            ResponseType::ChannelMessageWithSource => Ok(
+                InteractionResponse::ChannelMessageWithSource(self.to_callback_data()?),
+            ),
+            ResponseType::DeferredChannelMessageWithSource => Ok(
+                InteractionResponse::DeferredChannelMessageWithSource(self.to_callback_data()?),
+            ),
+            ResponseType::UpdateMessage => Ok(InteractionResponse::UpdateMessage(
+                self.to_callback_data()?,
+            )),
+            ResponseType::ApplicationCommandAutocompleteResult => {
+                Ok(InteractionResponse::Autocomplete(self.to_auto_complete()?))
+            }
+            ResponseType::Modal => Ok(InteractionResponse::Modal(self.to_modal()?)),
+        }
+    }
+
+    fn to_callback_data(self) -> Result<CallbackData, String> {
+        Ok(CallbackData {
+            allowed_mentions: self.allowed_mentions,
+            components: self.components,
+            content: self.content,
+            embeds: self.embeds.unwrap_or(Vec::new()),
+            flags: self.flags,
+            tts: self.tts,
+        })
+    }
+
+    fn to_auto_complete(self) -> Result<Autocomplete, String> {
+        if self.choices.is_none() {
+            return Err(self.to_error(ResponseType::ApplicationCommandAutocompleteResult));
+        }
+
+        Ok(Autocomplete {
+            choices: self.choices.unwrap(),
+        })
+    }
+
+    fn to_modal(self) -> Result<ModalData, String> {
+        // let custom_id = self.custom_id.ok_or_else(|| self.to_error(ResponseType::Modal))?;
+        // let title = self.title.ok_or_else(|| self.to_error(ResponseType::Modal))?;
+        // let components = self.components.ok_or_else(|| self.to_error(ResponseType::Modal))?;
+
+        if self.custom_id.is_none() | self.title.is_none() | self.components.is_none() {
+            return Err(self.to_error(ResponseType::Modal));
+        }
+
+        Ok(ModalData {
+            custom_id: self.custom_id.unwrap(),
+            title: self.title.unwrap(),
+            components: self.components.unwrap(),
+        })
+    }
+
+    fn to_error(&self, kind: ResponseType) -> String {
+        format!(
+            "unknown type/data combination: type={:?} data={:?}",
+            kind, self
+        )
+    }
 }
 
 /// Optional extra data sent when responding to an [`Interaction`] of type

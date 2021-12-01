@@ -3,12 +3,13 @@
 mod callback_data;
 mod response_type;
 
+use crate::application::callback::callback_data::CallbackDataHolder;
+
 pub use self::{
     callback_data::Autocomplete, callback_data::CallbackData, callback_data::ModalData,
     response_type::ResponseType,
 };
 
-use callback_data::CallbackDataEnvelope;
 use serde::{
     de::{Deserializer, Error as DeError, IgnoredAny, MapAccess, Visitor},
     ser::{SerializeStruct, Serializer},
@@ -102,7 +103,7 @@ impl<'de> Visitor<'de> for ResponseVisitor {
     }
 
     fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
-        let mut data: Option<CallbackDataEnvelope> = None;
+        let mut data: Option<CallbackDataHolder> = None;
         let mut kind: Option<ResponseType> = None;
 
         let span = tracing::trace_span!("deserializing interaction response");
@@ -147,25 +148,31 @@ impl<'de> Visitor<'de> for ResponseVisitor {
         }
 
         let kind = kind.ok_or_else(|| DeError::missing_field("type"))?;
+        let data = data
+            // .ok_or_else(|| DeError::missing_field("data"))?
+            .map(|holder| holder.to_response(kind));
+        // .to_response(kind)
+        // .map_err(|err| DeError::custom(err))?;
 
         Ok(match (kind, data) {
             (ResponseType::Pong, _) => Self::Value::Pong,
             (
                 ResponseType::ChannelMessageWithSource,
-                Some(CallbackDataEnvelope::Messages(data)),
+                Some(Ok(Self::Value::ChannelMessageWithSource(data))),
             ) => Self::Value::ChannelMessageWithSource(data),
             (
                 ResponseType::DeferredChannelMessageWithSource,
-                Some(CallbackDataEnvelope::Messages(data)),
+                Some(Ok(Self::Value::DeferredChannelMessageWithSource(data))),
             ) => Self::Value::DeferredChannelMessageWithSource(data),
             (ResponseType::DeferredUpdateMessage, _) => Self::Value::DeferredUpdateMessage,
-            (ResponseType::UpdateMessage, Some(CallbackDataEnvelope::Messages(data))) => {
+            (ResponseType::UpdateMessage, Some(Ok(Self::Value::UpdateMessage(data)))) => {
                 Self::Value::UpdateMessage(data)
             }
             (
                 ResponseType::ApplicationCommandAutocompleteResult,
-                Some(CallbackDataEnvelope::Autocomplete(data)),
+                Some(Ok(Self::Value::Autocomplete(data))),
             ) => Self::Value::Autocomplete(data),
+            (ResponseType::Modal, Some(Ok(Self::Value::Modal(data)))) => Self::Value::Modal(data),
             (t, d) => {
                 return Err(DeError::custom(format!(
                     "unknown type/data combination: type={:?} data={:?}",
@@ -218,8 +225,17 @@ impl Serialize for InteractionResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{CallbackData, InteractionResponse};
-    use crate::channel::message::MessageFlags;
+    use super::{Autocomplete, CallbackData, InteractionResponse, ModalData};
+    use crate::{
+        application::{
+            callback::ResponseType,
+            command::CommandOptionChoice,
+            component::{
+                input_text::InputTextStyle, ActionRow, Component, ComponentType, InputText,
+            },
+        },
+        channel::message::MessageFlags,
+    };
     use serde::{Deserialize, Serialize};
     use serde_test::Token;
     use static_assertions::assert_impl_all;
@@ -238,7 +254,164 @@ mod tests {
     );
 
     #[test]
-    fn test_response() {
+    fn test_kind() {
+        let callback = CallbackData {
+            allowed_mentions: None,
+            content: None,
+            components: None,
+            embeds: Vec::new(),
+            flags: None,
+            tts: None,
+        };
+
+        let autocomplete = Autocomplete {
+            choices: Vec::new(),
+        };
+
+        let modal = ModalData {
+            custom_id: "modal-1".to_owned(),
+            title: "test".to_owned(),
+            components: Vec::new(),
+        };
+
+        assert_eq!(
+            InteractionResponse::Autocomplete(autocomplete).kind(),
+            ResponseType::ApplicationCommandAutocompleteResult
+        );
+        assert_eq!(InteractionResponse::Pong.kind(), ResponseType::Pong);
+        assert_eq!(
+            InteractionResponse::ChannelMessageWithSource(callback.clone()).kind(),
+            ResponseType::ChannelMessageWithSource
+        );
+        assert_eq!(
+            InteractionResponse::DeferredChannelMessageWithSource(callback.clone()).kind(),
+            ResponseType::DeferredChannelMessageWithSource
+        );
+        assert_eq!(
+            InteractionResponse::DeferredUpdateMessage.kind(),
+            ResponseType::DeferredUpdateMessage
+        );
+        assert_eq!(
+            InteractionResponse::UpdateMessage(callback.clone()).kind(),
+            ResponseType::UpdateMessage
+        );
+        assert_eq!(
+            InteractionResponse::Modal(modal).kind(),
+            ResponseType::Modal
+        );
+    }
+
+    #[test]
+    fn test_autocomplete() {
+        let value = InteractionResponse::Autocomplete(Autocomplete {
+            choices: Vec::from([CommandOptionChoice::String {
+                name: "Twilight".to_owned(),
+                value: "twilight".to_owned(),
+            }]),
+        });
+
+        serde_test::assert_ser_tokens(
+            &value,
+            &[
+                Token::Struct {
+                    name: "InteractionResponse",
+                    len: 2,
+                },
+                Token::String("type"),
+                Token::U8(ResponseType::ApplicationCommandAutocompleteResult as u8),
+                Token::String("data"),
+                Token::Struct {
+                    name: "Autocomplete",
+                    len: 1,
+                },
+                Token::String("choices"),
+                Token::Seq { len: Some(1) },
+                Token::Struct {
+                    name: "CommandOptionChoice",
+                    len: 2,
+                },
+                Token::String("name"),
+                Token::String("Twilight"),
+                Token::String("value"),
+                Token::String("twilight"),
+                Token::StructEnd,
+                Token::SeqEnd,
+                Token::StructEnd,
+                Token::StructEnd,
+            ],
+        );
+
+        serde_test::assert_de_tokens(
+            &value,
+            &[
+                Token::Struct {
+                    name: "InteractionResponse",
+                    len: 2,
+                },
+                Token::String("type"),
+                Token::U8(ResponseType::ApplicationCommandAutocompleteResult as u8),
+                Token::String("data"),
+                Token::Struct {
+                    name: "CallbackDataHolder",
+                    len: 1,
+                },
+                Token::String("choices"),
+                Token::Some,
+                Token::Seq { len: Some(1) },
+                Token::Struct {
+                    name: "CommandOptionChoice",
+                    len: 2,
+                },
+                Token::String("name"),
+                Token::String("Twilight"),
+                Token::String("value"),
+                Token::String("twilight"),
+                Token::StructEnd,
+                Token::SeqEnd,
+                Token::StructEnd,
+                Token::StructEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_pong() {
+        let value = InteractionResponse::Pong;
+
+        serde_test::assert_tokens(
+            &value,
+            &[
+                Token::Struct {
+                    name: "InteractionResponse",
+                    len: 1,
+                },
+                Token::String("type"),
+                Token::U8(ResponseType::Pong as u8),
+                Token::StructEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_deferred_update_message() {
+        let value = InteractionResponse::DeferredUpdateMessage;
+
+        serde_test::assert_tokens(
+            &value,
+            &[
+                Token::Struct {
+                    name: "InteractionResponse",
+                    len: 1,
+                },
+                Token::String("type"),
+                Token::U8(ResponseType::DeferredUpdateMessage as u8),
+                Token::StructEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_channel_message_with_source() {
         let value = InteractionResponse::ChannelMessageWithSource(CallbackData {
             allowed_mentions: None,
             content: Some("test".into()),
@@ -248,7 +421,7 @@ mod tests {
             tts: None,
         });
 
-        serde_test::assert_tokens(
+        serde_test::assert_ser_tokens(
             &value,
             &[
                 Token::Struct {
@@ -256,7 +429,7 @@ mod tests {
                     len: 2,
                 },
                 Token::Str("type"),
-                Token::U8(4),
+                Token::U8(ResponseType::ChannelMessageWithSource as u8),
                 Token::Str("data"),
                 Token::Struct {
                     name: "CallbackData",
@@ -267,7 +440,151 @@ mod tests {
                 Token::Str("test"),
                 Token::Str("flags"),
                 Token::Some,
-                Token::U64(64),
+                Token::U64(MessageFlags::EPHEMERAL.bits()),
+                Token::StructEnd,
+                Token::StructEnd,
+            ],
+        );
+
+        serde_test::assert_de_tokens(
+            &value,
+            &[
+                Token::Struct {
+                    name: "InteractionResponse",
+                    len: 2,
+                },
+                Token::Str("type"),
+                Token::U8(ResponseType::ChannelMessageWithSource as u8),
+                Token::Str("data"),
+                Token::Struct {
+                    name: "CallbackDataHolder",
+                    len: 2,
+                },
+                Token::Str("content"),
+                Token::Some,
+                Token::Str("test"),
+                Token::Str("flags"),
+                Token::Some,
+                Token::U64(MessageFlags::EPHEMERAL.bits()),
+                Token::StructEnd,
+                Token::StructEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_modal() {
+        let value = InteractionResponse::Modal(ModalData {
+            custom_id: "modal-1".to_owned(),
+            title: "Test".to_owned(),
+            components: Vec::from([Component::ActionRow(ActionRow {
+                components: Vec::from([Component::InputText(InputText {
+                    custom_id: "input-1".to_owned(),
+                    label: "Test".to_owned(),
+                    style: InputTextStyle::Short,
+                    placeholder: None,
+                    max_length: None,
+                    min_length: None,
+                })]),
+            })]),
+        });
+
+        serde_test::assert_ser_tokens(
+            &value,
+            &[
+                Token::Struct {
+                    name: "InteractionResponse",
+                    len: 2,
+                },
+                Token::Str("type"),
+                Token::U8(ResponseType::Modal as u8),
+                Token::String("data"),
+                Token::Struct {
+                    name: "ModalData",
+                    len: 3,
+                },
+                Token::String("custom_id"),
+                Token::String("modal-1"),
+                Token::String("title"),
+                Token::String("Test"),
+                Token::String("components"),
+                Token::Seq { len: Some(1) },
+                Token::Struct {
+                    name: "ActionRow",
+                    len: 2,
+                },
+                Token::String("components"),
+                Token::Seq { len: Some(1) },
+                Token::Struct {
+                    name: "InputText",
+                    len: 4,
+                },
+                Token::String("type"),
+                Token::U8(ComponentType::InputText as u8),
+                Token::String("custom_id"),
+                Token::String("input-1"),
+                Token::String("label"),
+                Token::String("Test"),
+                Token::String("style"),
+                Token::U8(InputTextStyle::Short as u8),
+                Token::StructEnd,
+                Token::SeqEnd,
+                Token::String("type"),
+                Token::U8(ComponentType::ActionRow as u8),
+                Token::StructEnd,
+                Token::SeqEnd,
+                Token::StructEnd,
+                Token::StructEnd,
+            ],
+        );
+
+        serde_test::assert_de_tokens(
+            &value,
+            &[
+                Token::Struct {
+                    name: "InteractionResponse",
+                    len: 2,
+                },
+                Token::Str("type"),
+                Token::U8(ResponseType::Modal as u8),
+                Token::String("data"),
+                Token::Struct {
+                    name: "CallbackDataHolder",
+                    len: 3,
+                },
+                Token::String("custom_id"),
+                Token::Some,
+                Token::String("modal-1"),
+                Token::String("title"),
+                Token::Some,
+                Token::String("Test"),
+                Token::String("components"),
+                Token::Some,
+                Token::Seq { len: Some(1) },
+                Token::Struct {
+                    name: "ActionRow",
+                    len: 2,
+                },
+                Token::String("components"),
+                Token::Seq { len: Some(1) },
+                Token::Struct {
+                    name: "InputText",
+                    len: 4,
+                },
+                Token::String("type"),
+                Token::U8(ComponentType::InputText as u8),
+                Token::String("custom_id"),
+                Token::String("input-1"),
+                Token::String("label"),
+                Token::String("Test"),
+                Token::String("style"),
+                Token::U8(InputTextStyle::Short as u8),
+                Token::StructEnd,
+                Token::SeqEnd,
+                Token::String("type"),
+                Token::U8(ComponentType::ActionRow as u8),
+                Token::StructEnd,
+                Token::SeqEnd,
                 Token::StructEnd,
                 Token::StructEnd,
             ],
