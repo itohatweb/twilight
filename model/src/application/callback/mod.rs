@@ -486,6 +486,7 @@ mod tests {
                     placeholder: None,
                     max_length: None,
                     min_length: None,
+                    required: None,
                 })]),
             })]),
         });
