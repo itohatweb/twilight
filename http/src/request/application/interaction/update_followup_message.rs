@@ -348,7 +348,7 @@ impl<'a> UpdateFollowupMessage<'a> {
         mut self,
         embeds: Option<&'a [Embed]>,
     ) -> Result<Self, UpdateFollowupMessageError> {
-        if let Some(embeds_present) = embeds.as_deref() {
+        if let Some(embeds_present) = embeds {
             if embeds_present.len() > Self::EMBED_COUNT_LIMIT {
                 return Err(UpdateFollowupMessageError {
                     kind: UpdateFollowupMessageErrorType::TooManyEmbeds,
@@ -411,6 +411,7 @@ impl<'a> UpdateFollowupMessage<'a> {
     fn request(&mut self) -> Result<Request, HttpError> {
         let mut request = Request::builder(&Route::UpdateWebhookMessage {
             message_id: self.message_id.get(),
+            thread_id: None,
             token: self.token,
             webhook_id: self.application_id.get(),
         });
@@ -428,7 +429,7 @@ impl<'a> UpdateFollowupMessage<'a> {
                 }
             }
 
-            if let Some(payload_json) = self.fields.payload_json.as_deref() {
+            if let Some(payload_json) = self.fields.payload_json {
                 form.payload_json(payload_json);
             } else {
                 if self.fields.allowed_mentions.is_none() {
@@ -448,7 +449,7 @@ impl<'a> UpdateFollowupMessage<'a> {
             request = request.json(&self.fields)?;
         }
 
-        Ok(request.build())
+        Ok(request.use_authorization_token(false).build())
     }
 
     pub fn exec(mut self) -> ResponseFuture<EmptyBody> {
@@ -456,5 +457,35 @@ impl<'a> UpdateFollowupMessage<'a> {
             Ok(request) => self.http.request(request),
             Err(source) => ResponseFuture::error(source),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::client::Client;
+    use std::error::Error;
+    use twilight_http_ratelimiting::Path;
+    use twilight_model::id::{ApplicationId, MessageId};
+
+    #[test]
+    fn test_update_followup_message() -> Result<(), Box<dyn Error>> {
+        let application_id = ApplicationId::new(1).expect("non zero id");
+        let message_id = MessageId::new(2).expect("non zero id");
+        let token = "foo".to_owned().into_boxed_str();
+
+        let client = Client::new(String::new());
+        client.set_application_id(application_id);
+        let req = client
+            .update_followup_message(&token, message_id)?
+            .content(Some("test"))?
+            .request()?;
+
+        assert!(!req.use_authorization_token());
+        assert_eq!(
+            &Path::WebhooksIdTokenMessagesId(application_id.get(), token),
+            req.ratelimit_path()
+        );
+
+        Ok(())
     }
 }

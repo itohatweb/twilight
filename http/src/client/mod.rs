@@ -5,7 +5,6 @@ pub use self::builder::ClientBuilder;
 #[allow(deprecated)]
 use crate::{
     error::{Error, ErrorType},
-    ratelimiting::Ratelimiter,
     request::{
         application::{
             command::{
@@ -89,12 +88,12 @@ use crate::{
     API_VERSION,
 };
 use hyper::{
-    client::{Client as HyperClient, HttpConnector},
+    client::Client as HyperClient,
     header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT},
     Body,
 };
 use std::{
-    convert::TryFrom,
+    convert::{AsRef, TryFrom},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -102,6 +101,7 @@ use std::{
     time::Duration,
 };
 use tokio::time;
+use twilight_http_ratelimiting::Ratelimiter;
 use twilight_model::{
     application::{
         callback::InteractionResponse,
@@ -109,7 +109,6 @@ use twilight_model::{
     },
     channel::{
         message::{allowed_mentions::AllowedMentions, sticker::StickerId},
-        thread::AutoArchiveDuration,
         ChannelType,
     },
     guild::Permissions,
@@ -123,6 +122,11 @@ use twilight_model::{
 type HttpsConnector<T> = hyper_rustls::HttpsConnector<T>;
 #[cfg(all(feature = "hyper-tls", not(feature = "hyper-rustls")))]
 type HttpsConnector<T> = hyper_tls::HttpsConnector<T>;
+
+#[cfg(feature = "trust-dns")]
+type HttpConnector = hyper_trust_dns::TrustDnsHttpConnector;
+#[cfg(not(feature = "trust-dns"))]
+type HttpConnector = hyper::client::HttpConnector;
 
 /// Twilight's http client.
 ///
@@ -197,7 +201,7 @@ pub struct Client {
     default_headers: Option<HeaderMap>,
     http: HyperClient<HttpsConnector<HttpConnector>, Body>,
     proxy: Option<Box<str>>,
-    ratelimiter: Option<Ratelimiter>,
+    ratelimiter: Option<Box<dyn Ratelimiter>>,
     /// Whether to short-circuit when a 401 has been encountered with the client
     /// authorization.
     ///
@@ -268,8 +272,8 @@ impl Client {
     ///
     /// This will return `None` only if ratelimit handling
     /// has been explicitly disabled in the [`ClientBuilder`].
-    pub fn ratelimiter(&self) -> Option<Ratelimiter> {
-        self.ratelimiter.clone()
+    pub fn ratelimiter(&self) -> Option<&dyn Ratelimiter> {
+        self.ratelimiter.as_ref().map(AsRef::as_ref)
     }
 
     /// Get the audit log for a guild.
@@ -1605,10 +1609,9 @@ impl Client {
         &'a self,
         channel_id: ChannelId,
         name: &'a str,
-        auto_archive_duration: AutoArchiveDuration,
         kind: ChannelType,
     ) -> Result<CreateThread<'_>, ThreadValidationError> {
-        CreateThread::new(self, channel_id, name, auto_archive_duration, kind)
+        CreateThread::new(self, channel_id, name, kind)
     }
 
     /// Create a new thread from an existing message.
@@ -1637,9 +1640,8 @@ impl Client {
         channel_id: ChannelId,
         message_id: MessageId,
         name: &'a str,
-        auto_archive_duration: AutoArchiveDuration,
     ) -> Result<CreateThreadFromMessage<'_>, ThreadValidationError> {
-        CreateThreadFromMessage::new(self, channel_id, message_id, name, auto_archive_duration)
+        CreateThreadFromMessage::new(self, channel_id, message_id, name)
     }
 
     /// Add the current user to a thread.
@@ -2739,7 +2741,7 @@ impl Client {
         tracing::debug!("URL: {:?}", url);
 
         let mut builder = hyper::Request::builder()
-            .method(method.into_hyper())
+            .method(method.into_http())
             .uri(&url);
 
         if use_authorization_token {
@@ -2838,7 +2840,10 @@ impl Client {
 
         let inner = self.http.request(req);
 
-        let invalid_token = if self.remember_invalid_token {
+        // For requests that don't use an authorization token we don't need to
+        // remember whether the token is invalid. This may be for requests such
+        // as webhooks and interactions.
+        let invalid_token = if self.remember_invalid_token && use_authorization_token {
             InvalidToken::Remember(Arc::clone(&self.token_invalid))
         } else {
             InvalidToken::Forget
@@ -2848,12 +2853,12 @@ impl Client {
         // due to move semantics in both cases.
         #[allow(clippy::option_if_let_else)]
         if let Some(ratelimiter) = self.ratelimiter.as_ref() {
-            let rx = ratelimiter.ticket(ratelimit_path);
+            let tx_future = ratelimiter.wait_for_ticket(ratelimit_path);
 
             Ok(ResponseFuture::ratelimit(
                 None,
                 invalid_token,
-                rx,
+                tx_future,
                 self.timeout,
                 inner,
             ))

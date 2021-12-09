@@ -1,4 +1,4 @@
-use super::{path::Path, route_display::RouteDisplay};
+use super::{route_display::RouteDisplay, Path};
 use crate::request::{channel::reaction::RequestReactionType, Method};
 use twilight_model::id::RoleId;
 
@@ -296,6 +296,8 @@ pub enum Route<'a> {
     /// Route information to delete a message created by a webhook.
     DeleteWebhookMessage {
         message_id: u64,
+        /// ID of the thread channel, if there is one.
+        thread_id: Option<u64>,
         token: &'a str,
         webhook_id: u64,
     },
@@ -308,6 +310,8 @@ pub enum Route<'a> {
     },
     /// Route information to execute a webhook by ID and token.
     ExecuteWebhook {
+        /// ID of the thread channel, if there is one.
+        thread_id: Option<u64>,
         /// The token of the webhook.
         token: &'a str,
         /// Whether to wait for a message response.
@@ -401,6 +405,8 @@ pub enum Route<'a> {
         application_id: u64,
         /// Token of the interaction.
         interaction_token: &'a str,
+        /// ID of the thread channel, if there is one.
+        thread_id: Option<u64>,
         /// ID of the followup message.
         message_id: u64,
     },
@@ -696,6 +702,8 @@ pub enum Route<'a> {
     GetWebhookMessage {
         /// ID of the message.
         message_id: u64,
+        /// ID of the thread channel, if there is one.
+        thread_id: Option<u64>,
         /// Token of the webhook.
         token: &'a str,
         /// ID of the webhook.
@@ -953,6 +961,8 @@ pub enum Route<'a> {
     /// Route information to update a message created by a webhook.
     UpdateWebhookMessage {
         message_id: u64,
+        /// ID of the thread channel, if there is one.
+        thread_id: Option<u64>,
         token: &'a str,
         webhook_id: u64,
     },
@@ -1180,7 +1190,7 @@ impl<'a> Route<'a> {
 
     /// Typed path of the route.
     ///
-    /// Paths are used with the [`Ratelimiter`].
+    /// Paths are used with a [`Ratelimiter`].
     ///
     /// # Examples
     ///
@@ -1188,16 +1198,17 @@ impl<'a> Route<'a> {
     ///
     /// ```
     /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use twilight_http::{ratelimiting::Ratelimiter, routing::Route};
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// use twilight_http::routing::Route;
+    /// use twilight_http_ratelimiting::{InMemoryRatelimiter, Ratelimiter};
     ///
-    /// let ratelimiter = Ratelimiter::new();
+    /// let ratelimiter = InMemoryRatelimiter::new();
     /// let route = Route::CreateMessage {
     ///     channel_id: 123,
     ///  };
     ///
     /// // Take a ticket from the ratelimiter.
-    /// let rx = ratelimiter.ticket(route.path());
+    /// let rx = ratelimiter.ticket(route.path()).await?;
     ///
     /// // Wait to be told that a request can be made...
     /// let _tx = rx.await;
@@ -1206,9 +1217,9 @@ impl<'a> Route<'a> {
     /// # Ok(()) }
     /// ```
     ///
-    /// [`Ratelimiter`]: crate::ratelimiting::Ratelimiter
+    /// [`Ratelimiter`]: twilight_http_ratelimiting::Ratelimiter
     #[allow(clippy::too_many_lines)]
-    pub const fn path(&self) -> Path {
+    pub fn path(&self) -> Path {
         match self {
             Self::AddGuildMember { guild_id, .. }
             | Self::GetMember { guild_id, .. }
@@ -1237,8 +1248,10 @@ impl<'a> Route<'a> {
             | Self::SetGlobalCommands { application_id } => {
                 Path::ApplicationCommand(*application_id)
             }
-            Self::CreateGuild | Self::CreateGuildFromTemplate { .. } | Self::GetTemplate { .. } => {
-                Path::Guilds
+            Self::CreateGuild => Path::Guilds,
+            Self::CreateGuildFromTemplate { template_code, .. }
+            | Self::GetTemplate { template_code, .. } => {
+                Path::GuildsTemplatesCode((*template_code).to_string().into_boxed_str())
             }
             Self::CreateGuildCommand { application_id, .. }
             | Self::DeleteGuildCommand { application_id, .. }
@@ -1304,12 +1317,29 @@ impl<'a> Route<'a> {
             | Self::UpdateGuildIntegration { guild_id, .. } => {
                 Path::GuildsIdIntegrationsId(*guild_id)
             }
-            Self::DeleteInteractionOriginal { application_id, .. }
-            | Self::GetFollowupMessage { application_id, .. }
-            | Self::GetInteractionOriginal { application_id, .. }
-            | Self::UpdateInteractionOriginal { application_id, .. } => {
-                Path::WebhooksIdTokenMessagesId(*application_id)
+            Self::DeleteInteractionOriginal {
+                application_id,
+                interaction_token,
+                ..
             }
+            | Self::GetFollowupMessage {
+                application_id,
+                interaction_token,
+                ..
+            }
+            | Self::GetInteractionOriginal {
+                application_id,
+                interaction_token,
+                ..
+            }
+            | Self::UpdateInteractionOriginal {
+                application_id,
+                interaction_token,
+                ..
+            } => Path::WebhooksIdTokenMessagesId(
+                *application_id,
+                (*interaction_token).to_string().into_boxed_str(),
+            ),
             Self::DeleteInvite { .. }
             | Self::GetInvite { .. }
             | Self::GetInviteWithExpiration { .. } => Path::InvitesCode,
@@ -1329,16 +1359,53 @@ impl<'a> Route<'a> {
             Self::DeleteRole { guild_id, .. }
             | Self::UpdateRole { guild_id, .. }
             | Self::UpdateRolePositions { guild_id } => Path::GuildsIdRolesId(*guild_id),
-            Self::DeleteTemplate { guild_id, .. }
-            | Self::SyncTemplate { guild_id, .. }
-            | Self::UpdateTemplate { guild_id, .. } => (Path::GuildsIdTemplatesCode(*guild_id)),
-            Self::DeleteWebhookMessage { webhook_id, .. }
-            | Self::GetWebhookMessage { webhook_id, .. }
-            | Self::UpdateWebhookMessage { webhook_id, .. } => {
-                Path::WebhooksIdTokenMessagesId(*webhook_id)
+            Self::DeleteTemplate {
+                guild_id,
+                template_code,
+                ..
             }
+            | Self::SyncTemplate {
+                guild_id,
+                template_code,
+                ..
+            }
+            | Self::UpdateTemplate {
+                guild_id,
+                template_code,
+                ..
+            } => Path::GuildsIdTemplatesCode(
+                *guild_id,
+                (*template_code).to_string().into_boxed_str(),
+            ),
+            Self::DeleteWebhookMessage {
+                webhook_id, token, ..
+            }
+            | Self::GetWebhookMessage {
+                webhook_id, token, ..
+            }
+            | Self::UpdateWebhookMessage {
+                webhook_id, token, ..
+            } => {
+                Path::WebhooksIdTokenMessagesId(*webhook_id, (*token).to_string().into_boxed_str())
+            }
+            Self::DeleteWebhook {
+                webhook_id,
+                token: Some(token),
+                ..
+            }
+            | Self::ExecuteWebhook {
+                webhook_id, token, ..
+            }
+            | Self::GetWebhook {
+                webhook_id,
+                token: Some(token),
+                ..
+            }
+            | Self::UpdateWebhook {
+                webhook_id,
+                token: Some(token),
+            } => Path::WebhooksIdToken(*webhook_id, (*token).to_string().into_boxed_str()),
             Self::DeleteWebhook { webhook_id, .. }
-            | Self::ExecuteWebhook { webhook_id, .. }
             | Self::GetWebhook { webhook_id, .. }
             | Self::UpdateWebhook { webhook_id, .. } => (Path::WebhooksId(*webhook_id)),
             Self::FollowNewsChannel { channel_id } => Path::ChannelsIdFollowers(*channel_id),

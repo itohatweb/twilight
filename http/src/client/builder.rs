@@ -1,5 +1,4 @@
 use super::Client;
-use crate::ratelimiting::Ratelimiter;
 use hyper::header::HeaderMap;
 use std::{
     sync::{
@@ -8,6 +7,7 @@ use std::{
     },
     time::Duration,
 };
+use twilight_http_ratelimiting::{InMemoryRatelimiter, Ratelimiter};
 use twilight_model::{channel::message::allowed_mentions::AllowedMentions, id::ApplicationId};
 
 #[derive(Debug)]
@@ -16,7 +16,7 @@ pub struct ClientBuilder {
     pub(crate) application_id: AtomicU64,
     pub(crate) default_allowed_mentions: Option<AllowedMentions>,
     pub(crate) proxy: Option<Box<str>>,
-    pub(crate) ratelimiter: Option<Ratelimiter>,
+    pub(crate) ratelimiter: Option<Box<dyn Ratelimiter>>,
     remember_invalid_token: bool,
     pub(crate) default_headers: Option<HeaderMap>,
     pub(crate) timeout: Duration,
@@ -32,16 +32,35 @@ impl ClientBuilder {
 
     /// Build the [`Client`].
     pub fn build(self) -> Client {
+        #[cfg(not(feature = "trust-dns"))]
+        let mut http_connector = hyper::client::HttpConnector::new();
+        #[cfg(feature = "trust-dns")]
+        let mut http_connector = hyper_trust_dns::new_trust_dns_http_connector();
+
+        http_connector.enforce_http(false);
+
         #[cfg(feature = "rustls-native-roots")]
-        let connector = hyper_rustls::HttpsConnector::with_native_roots();
+        let connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .wrap_connector(http_connector);
+
         #[cfg(all(feature = "rustls-webpki-roots", not(feature = "rustls-native-roots")))]
-        let connector = hyper_rustls::HttpsConnector::with_webpki_roots();
+        let connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_webpki_roots()
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .wrap_connector(http_connector);
+
         #[cfg(all(
             feature = "hyper-tls",
             not(feature = "rustls-native-roots"),
             not(feature = "rustls-webpki-roots")
         ))]
-        let connector = hyper_tls::HttpsConnector::new();
+        let connector = hyper_tls::HttpsConnector::new_with_connector(http_connector);
 
         let http = hyper::client::Builder::default().build(connector);
 
@@ -108,10 +127,10 @@ impl ClientBuilder {
     /// If the argument is `None` then the client's ratelimiter will be skipped
     /// before making a request.
     ///
-    /// If this method is not called at all then a default ratelimiter will be
+    /// If this method is not called at all then a default [`InMemoryRatelimiter`] will be
     /// created by [`ClientBuilder::build`].
     #[allow(clippy::missing_const_for_fn)]
-    pub fn ratelimiter(mut self, ratelimiter: Option<Ratelimiter>) -> Self {
+    pub fn ratelimiter(mut self, ratelimiter: Option<Box<dyn Ratelimiter>>) -> Self {
         self.ratelimiter = ratelimiter;
 
         self
@@ -170,7 +189,7 @@ impl Default for ClientBuilder {
             default_allowed_mentions: None,
             default_headers: None,
             proxy: None,
-            ratelimiter: Some(Ratelimiter::new()),
+            ratelimiter: Some(Box::new(InMemoryRatelimiter::default())),
             remember_invalid_token: true,
             timeout: Duration::from_secs(10),
             token: None,
