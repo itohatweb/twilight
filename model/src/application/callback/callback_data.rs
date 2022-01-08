@@ -52,6 +52,7 @@ impl CallbackDataHolder {
     }
 
     #[allow(clippy::wrong_self_convention)]
+    #[allow(clippy::missing_const_for_fn)]
     fn to_callback_data(self) -> CallbackData {
         CallbackData {
             allowed_mentions: self.allowed_mentions,
