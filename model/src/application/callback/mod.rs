@@ -271,7 +271,7 @@ mod tests {
             allowed_mentions: None,
             content: None,
             components: None,
-            embeds: Vec::new(),
+            embeds: None,
             flags: None,
             tts: None,
         };

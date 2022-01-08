@@ -57,7 +57,7 @@ impl CallbackDataHolder {
             allowed_mentions: self.allowed_mentions,
             components: self.components,
             content: self.content,
-            embeds: self.embeds.unwrap_or_default(),
+            embeds: self.embeds,
             flags: self.flags,
             tts: self.tts,
         }
