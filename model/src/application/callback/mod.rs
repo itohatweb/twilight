@@ -428,7 +428,7 @@ mod tests {
             allowed_mentions: None,
             content: Some("test".into()),
             components: None,
-            embeds: Vec::new(),
+            embeds: None,
             flags: Some(MessageFlags::EPHEMERAL),
             tts: None,
         });

@@ -79,12 +79,13 @@ use crate::{
             DeleteTemplate, GetTemplate, GetTemplates, SyncTemplate, UpdateTemplate,
         },
         user::{
-            CreatePrivateChannel, GetCurrentUser, GetCurrentUserConnections, GetCurrentUserGuilds,
-            GetUser, LeaveGuild, UpdateCurrentUser,
+            CreatePrivateChannel, GetCurrentUser, GetCurrentUserConnections,
+            GetCurrentUserGuildMember, GetCurrentUserGuilds, GetUser, LeaveGuild,
+            UpdateCurrentUser,
         },
         GetGateway, GetUserApplicationInfo, GetVoiceRegions, Method, Request,
     },
-    response::{future::InvalidToken, ResponseFuture},
+    response::ResponseFuture,
     API_VERSION,
 };
 use hyper::{
@@ -166,7 +167,7 @@ type HttpConnector = hyper::client::HttpConnector;
 /// # Examples
 ///
 /// Create a client called `client`:
-/// ```rust,no_run
+/// ```no_run
 /// use twilight_http::Client;
 ///
 /// # #[tokio::main]
@@ -177,7 +178,7 @@ type HttpConnector = hyper::client::HttpConnector;
 ///
 /// Use [`ClientBuilder`] to create a client called `client`, with a shorter
 /// timeout:
-/// ```rust,no_run
+/// ```no_run
 /// use twilight_http::Client;
 /// use std::time::Duration;
 ///
@@ -202,15 +203,12 @@ pub struct Client {
     http: HyperClient<HttpsConnector<HttpConnector>, Body>,
     proxy: Option<Box<str>>,
     ratelimiter: Option<Box<dyn Ratelimiter>>,
-    /// Whether to short-circuit when a 401 has been encountered with the client
-    /// authorization.
-    ///
-    /// This relates to [`token_invalid`].
-    ///
-    /// [`token_invalid`]: Self::token_invalid
-    remember_invalid_token: bool,
     timeout: Duration,
-    token_invalid: Arc<AtomicBool>,
+    /// Whether the token has been invalidated.
+    ///
+    /// Whether an invalid token is tracked can be configured via
+    /// [`ClientBuilder::remember_invalid_token`].
+    token_invalidated: Option<Arc<AtomicBool>>,
     token: Option<Box<str>>,
     use_http: bool,
 }
@@ -280,7 +278,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// use twilight_model::id::GuildId;
     ///
@@ -305,7 +303,7 @@ impl Client {
     ///
     /// Retrieve the bans for guild `1`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// use twilight_model::id::GuildId;
     /// #
@@ -337,7 +335,7 @@ impl Client {
     /// Ban user `200` from guild `100`, deleting
     /// 1 day's worth of messages, for the reason `"memes"`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::{request::AuditLogReason, Client};
     /// use twilight_model::id::{GuildId, UserId};
     /// #
@@ -364,7 +362,7 @@ impl Client {
     ///
     /// Unban user `200` from guild `100`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// use twilight_model::id::{GuildId, UserId};
     /// #
@@ -388,7 +386,7 @@ impl Client {
     ///
     /// Get channel `100`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::ChannelId;
     /// #
@@ -448,7 +446,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use twilight_http::Client;
     /// use twilight_model::id::{ChannelId, MessageId};
     ///
@@ -497,7 +495,7 @@ impl Client {
     ///
     /// Create permission overrides for a role to view the channel, but not send messages:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// use twilight_model::guild::Permissions;
     /// use twilight_model::id::{ChannelId, RoleId};
@@ -534,6 +532,14 @@ impl Client {
     /// Get information about the current user.
     pub const fn current_user(&self) -> GetCurrentUser<'_> {
         GetCurrentUser::new(self)
+    }
+
+    /// Get information about the current user in a guild.
+    pub const fn current_user_guild_member(
+        &self,
+        guild_id: GuildId,
+    ) -> GetCurrentUserGuildMember<'_> {
+        GetCurrentUserGuildMember::new(self, guild_id)
     }
 
     /// Get information about the current bot application.
@@ -579,7 +585,7 @@ impl Client {
     /// Get the first 25 guilds with an ID after `300` and before
     /// `400`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// use twilight_model::id::GuildId;
     ///
@@ -618,7 +624,7 @@ impl Client {
     ///
     /// Get the emojis for guild `100`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::GuildId;
     /// #
@@ -641,7 +647,7 @@ impl Client {
     ///
     /// Get emoji `100` from guild `50`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::{EmojiId, GuildId};
     /// #
@@ -692,7 +698,7 @@ impl Client {
     ///
     /// Get the gateway connection URL without bot information:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// #
     /// # #[tokio::main]
@@ -706,7 +712,7 @@ impl Client {
     /// Get the gateway connection URL with additional shard and session information, which
     /// requires specifying a bot token:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// #
     /// # #[tokio::main]
@@ -855,7 +861,7 @@ impl Client {
     ///
     /// Get the first 500 members of guild `100` after user ID `3000`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// use twilight_model::id::{GuildId, UserId};
     /// #
@@ -887,7 +893,7 @@ impl Client {
     ///
     /// Get the first 10 members of guild `100` matching `Wumpus`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use twilight_http::Client;
     /// use twilight_model::id::GuildId;
     ///
@@ -963,7 +969,7 @@ impl Client {
     ///
     /// Update a member's nickname to "pinky pie" and server mute them:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use std::env;
     /// use twilight_http::Client;
     /// use twilight_model::id::{GuildId, UserId};
@@ -1009,7 +1015,7 @@ impl Client {
     ///
     /// In guild `1`, add role `2` to user `3`, for the reason `"test"`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::{request::AuditLogReason, Client};
     /// use twilight_model::id::{GuildId, RoleId, UserId};
     /// #
@@ -1109,7 +1115,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// #
     /// # #[tokio::main]
@@ -1136,7 +1142,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::ChannelId;
     /// #
@@ -1178,7 +1184,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::ChannelId;
     /// #
@@ -1250,7 +1256,7 @@ impl Client {
     ///
     /// Replace the content with `"test update"`:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use twilight_http::Client;
     /// use twilight_model::id::{ChannelId, MessageId};
     ///
@@ -1266,7 +1272,7 @@ impl Client {
     ///
     /// Remove the message's content:
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::{ChannelId, MessageId};
     /// #
@@ -1331,7 +1337,7 @@ impl Client {
     /// The reaction must be a variant of [`RequestReactionType`].
     ///
     /// # Examples
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::{Client, request::channel::reaction::RequestReactionType};
     /// # use twilight_model::{
     /// #     id::{ChannelId, MessageId},
@@ -1421,7 +1427,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// use twilight_model::id::GuildId;
     ///
@@ -1781,7 +1787,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::ChannelId;
     /// #
@@ -1829,7 +1835,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use twilight_http::Client;
     /// # use twilight_model::id::WebhookId;
     /// #
@@ -2716,11 +2722,13 @@ impl Client {
 
     #[allow(clippy::too_many_lines)]
     fn try_request<T>(&self, request: Request) -> Result<ResponseFuture<T>, Error> {
-        if self.remember_invalid_token && self.token_invalid.load(Ordering::Relaxed) {
-            return Err(Error {
-                kind: ErrorType::Unauthorized,
-                source: None,
-            });
+        if let Some(token_invalidated) = self.token_invalidated.as_ref() {
+            if token_invalidated.load(Ordering::Relaxed) {
+                return Err(Error {
+                    kind: ErrorType::Unauthorized,
+                    source: None,
+                });
+            }
         }
 
         let Request {
@@ -2745,7 +2753,7 @@ impl Client {
             .uri(&url);
 
         if use_authorization_token {
-            if let Some(ref token) = self.token {
+            if let Some(token) = &self.token {
                 let value = HeaderValue::from_str(token).map_err(|source| {
                     #[allow(clippy::borrow_interior_mutable_const)]
                     let name = AUTHORIZATION.to_string();
@@ -2843,10 +2851,10 @@ impl Client {
         // For requests that don't use an authorization token we don't need to
         // remember whether the token is invalid. This may be for requests such
         // as webhooks and interactions.
-        let invalid_token = if self.remember_invalid_token && use_authorization_token {
-            InvalidToken::Remember(Arc::clone(&self.token_invalid))
+        let invalid_token = if use_authorization_token {
+            self.token_invalidated.as_ref().map(Arc::clone)
         } else {
-            InvalidToken::Forget
+            None
         };
 
         // Clippy suggests bad code; an `Option::map_or_else` won't work here

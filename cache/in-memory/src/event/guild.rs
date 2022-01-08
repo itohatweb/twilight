@@ -83,6 +83,7 @@ impl InMemoryCache {
             owner_id: guild.owner_id,
             permissions: guild.permissions,
             preferred_locale: guild.preferred_locale,
+            premium_progress_bar_enabled: guild.premium_progress_bar_enabled,
             premium_subscription_count: guild.premium_subscription_count,
             premium_tier: guild.premium_tier,
             rules_channel_id: guild.rules_channel_id,
@@ -304,6 +305,7 @@ mod tests {
             owner_id: UserId::new(456).expect("non zero"),
             permissions: Some(Permissions::SEND_MESSAGES),
             preferred_locale: "en-GB".to_owned(),
+            premium_progress_bar_enabled: true,
             premium_subscription_count: Some(0),
             premium_tier: PremiumTier::None,
             presences: Vec::new(),
@@ -342,14 +344,14 @@ mod tests {
         // guild ID to it. So now, the channel's guild ID is present with the
         // correct value.
         match channel.resource() {
-            GuildChannel::Text(ref c) => {
+            GuildChannel::Text(c) => {
                 assert_eq!(Some(GuildId::new(123).expect("non zero")), c.guild_id);
             }
             _ => panic!("{:?}", channel),
         }
 
         match thread.resource() {
-            GuildChannel::PublicThread(ref c) => {
+            GuildChannel::PublicThread(c) => {
                 assert_eq!(Some(GuildId::new(123).expect("non zero")), c.guild_id);
             }
             _ => panic!("{:?}", channel),
@@ -391,6 +393,7 @@ mod tests {
             owner: None,
             permissions: None,
             preferred_locale: "en_us".to_owned(),
+            premium_progress_bar_enabled: false,
             premium_subscription_count: None,
             premium_tier: PremiumTier::None,
             presences: Vec::new(),
@@ -435,6 +438,7 @@ mod tests {
             owner: guild.owner,
             permissions: guild.permissions,
             preferred_locale: guild.preferred_locale,
+            premium_progress_bar_enabled: guild.premium_progress_bar_enabled,
             premium_subscription_count: guild.premium_subscription_count,
             premium_tier: guild.premium_tier,
             roles: guild.roles,

@@ -50,6 +50,7 @@
 //! All first-party crates are licensed under [ISC][LICENSE.md]
 //!
 //! [LICENSE.md]: https://github.com/twilight-rs/twilight/blob/main/LICENSE.md
+//! [`twilight-rs`]: https://github.com/twilight-rs/twilight
 //! [codecov badge]: https://img.shields.io/codecov/c/gh/twilight-rs/twilight?logo=codecov&style=for-the-badge&token=E9ERLJL0L2
 //! [codecov link]: https://app.codecov.io/gh/twilight-rs/twilight/
 //! [discord badge]: https://img.shields.io/discord/745809834183753828?color=%237289DA&label=discord%20server&logo=discord&style=for-the-badge
@@ -61,7 +62,7 @@
 //! [license link]: https://github.com/twilight-rs/twilight/blob/main/LICENSE.md
 //! [rust badge]: https://img.shields.io/badge/rust-1.53+-93450a.svg?style=for-the-badge&logo=rust
 
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![deny(
     clippy::missing_const_for_fn,
     missing_docs,
@@ -76,7 +77,6 @@ pub mod iter;
 pub mod model;
 
 #[cfg(feature = "permission-calculator")]
-#[cfg_attr(docsrs, doc(cfg(feature = "permission-calculator")))]
 pub mod permission;
 
 mod builder;
@@ -94,7 +94,6 @@ pub use self::{
 };
 
 #[cfg(feature = "permission-calculator")]
-#[cfg_attr(docsrs, doc(cfg(feature = "permission-calculator")))]
 pub use self::permission::InMemoryCachePermissions;
 
 use self::{iter::InMemoryCacheIter, model::*};
@@ -102,6 +101,7 @@ use dashmap::{
     mapref::{entry::Entry, one::Ref},
     DashMap, DashSet,
 };
+use iter::ChannelMessages;
 use std::{
     collections::{BTreeSet, HashSet, VecDeque},
     fmt::{Debug, Formatter, Result as FmtResult},
@@ -209,8 +209,7 @@ fn upsert_item<K: Eq + Hash, V: PartialEq>(map: &DashMap<K, V>, k: K, v: V) {
     map.insert(k, v);
 }
 
-/// A thread-safe, in-memory-process cache of Discord data. It can be cloned and
-/// sent to other threads.
+/// An in-memory cache of Discord data.
 ///
 /// This is an implementation of a cache designed to be used by only the
 /// current process.
@@ -417,7 +416,6 @@ impl InMemoryCache {
     /// # Ok(()) }
     /// ```
     #[cfg(feature = "permission-calculator")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "permission-calculator")))]
     pub const fn permissions(&self) -> InMemoryCachePermissions<'_> {
         InMemoryCachePermissions::new(self)
     }
@@ -433,6 +431,24 @@ impl InMemoryCache {
             .lock()
             .expect("current user poisoned")
             .clone()
+    }
+
+    /// Gets the set of messages in a channel.
+    ///
+    /// This requires the [`DIRECT_MESSAGES`] or [`GUILD_MESSAGES`] intents.
+    ///
+    /// Returns `None` if the channel is not cached.
+    ///
+    /// # Examples
+    ///
+    /// Refer to [`ChannelMessages`].
+    ///
+    /// [`DIRECT_MESSAGES`]: ::twilight_model::gateway::Intents::DIRECT_MESSAGES
+    /// [`GUILD_MESSAGES`]: ::twilight_model::gateway::Intents::GUILD_MESSAGES
+    pub fn channel_messages(&self, channel_id: ChannelId) -> Option<ChannelMessages<'_>> {
+        let channel = self.channel_messages.get(&channel_id)?;
+
+        Some(ChannelMessages::new(channel))
     }
 
     /// Gets an emoji by ID.
@@ -578,6 +594,19 @@ impl InMemoryCache {
         guild_id: GuildId,
     ) -> Option<Reference<'_, GuildId, HashSet<StickerId>>> {
         self.guild_stickers.get(&guild_id).map(Reference::new)
+    }
+
+    /// Gets the set of voice states in a guild.
+    ///
+    /// This requires both the [`GUILDS`] and [`GUILD_VOICE_STATES`] intents.
+    ///
+    /// [`GUILDS`]: ::twilight_model::gateway::Intents::GUILDS
+    /// [`GUILD_VOICE_STATES`]: ::twilight_model::gateway::Intents::GUILD_VOICE_STATES
+    pub fn guild_voice_states(
+        &self,
+        guild_id: GuildId,
+    ) -> Option<Reference<'_, GuildId, HashSet<UserId>>> {
+        self.voice_state_guilds.get(&guild_id).map(Reference::new)
     }
 
     /// Gets an integration by guild ID and integration ID.
@@ -920,6 +949,7 @@ mod tests {
             guild_id,
             Member {
                 avatar: None,
+                communication_disabled_until: None,
                 deaf: false,
                 guild_id,
                 joined_at,
