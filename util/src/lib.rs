@@ -21,11 +21,6 @@
 //! Allows the use of a calculator to determine the permissions of a member in
 //! a guild or channel.
 //!
-//! ### `snowflake`
-//!
-//! Allows the use of the `Snowflake` trait, which provides methods for the extraction of
-//! structured information from [Discord snowflakes].
-//!
 //! [`twilight-rs`]: https://github.com/twilight-rs/twilight
 //! [codecov badge]: https://img.shields.io/codecov/c/gh/twilight-rs/twilight?logo=codecov&style=for-the-badge&token=E9ERLJL0L2
 //! [codecov link]: https://app.codecov.io/gh/twilight-rs/twilight/
@@ -35,7 +30,7 @@
 //! [github link]: https://github.com/twilight-rs/twilight
 //! [license badge]: https://img.shields.io/badge/license-ISC-blue.svg?style=for-the-badge&logo=pastebin
 //! [license link]: https://github.com/twilight-rs/twilight/blob/main/LICENSE.md
-//! [rust badge]: https://img.shields.io/badge/rust-1.53+-93450a.svg?style=for-the-badge&logo=rust
+//! [rust badge]: https://img.shields.io/badge/rust-1.57+-93450a.svg?style=for-the-badge&logo=rust
 //! [Discord snowflakes]: https://discord.com/developers/docs/reference#snowflakes
 
 #![deny(
@@ -61,6 +56,3 @@ pub mod link;
 
 #[cfg(feature = "permission-calculator")]
 pub mod permission_calculator;
-
-#[cfg(feature = "snowflake")]
-pub mod snowflake;
