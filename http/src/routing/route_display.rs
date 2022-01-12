@@ -1130,7 +1130,7 @@ mod tests {
         fmt::{Debug, Display},
         hash::Hash,
     };
-    use twilight_model::id::{EmojiId, RoleId};
+    use twilight_model::id::Id;
 
     assert_impl_all!(RouteDisplay<'_>: Clone, Debug, Display, Eq, Hash, PartialEq, Send, Sync);
 
@@ -1149,9 +1149,9 @@ mod tests {
     const TEMPLATE_CODE: &str = "templatecode";
     const USER_ID: u64 = 11;
 
-    fn emoji() -> RequestReactionType<'static> {
+    const fn emoji() -> RequestReactionType<'static> {
         RequestReactionType::Custom {
-            id: EmojiId::new(EMOJI_ID).expect("non zero id"),
+            id: Id::new(EMOJI_ID),
             name: None,
         }
     }
@@ -2937,7 +2937,7 @@ mod tests {
 
     #[test]
     fn test_create_guild_prune_include_one_role() {
-        let include_roles = [RoleId::new(1).expect("non zero id")];
+        let include_roles = [Id::new(1)];
 
         let route = Route::CreateGuildPrune {
             compute_prune_count: None,
@@ -2956,10 +2956,7 @@ mod tests {
 
     #[test]
     fn test_create_guild_prune_include_two_roles() {
-        let include_roles = [
-            RoleId::new(1).expect("non zero id"),
-            RoleId::new(2).expect("non zero id"),
-        ];
+        let include_roles = [Id::new(1), Id::new(2)];
 
         let route = Route::CreateGuildPrune {
             compute_prune_count: None,
@@ -2978,10 +2975,7 @@ mod tests {
 
     #[test]
     fn test_create_guild_prune_all() {
-        let include_roles = [
-            RoleId::new(1).expect("non zero id"),
-            RoleId::new(2).expect("non zero id"),
-        ];
+        let include_roles = [Id::new(1), Id::new(2)];
 
         let route = Route::CreateGuildPrune {
             compute_prune_count: Some(true),

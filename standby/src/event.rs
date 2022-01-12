@@ -2,7 +2,11 @@
 //!
 //! This is in its own file for better maintainability when a new event is added.
 
-use twilight_model::{channel::Channel, gateway::event::Event, id::GuildId};
+use twilight_model::{
+    channel::Channel,
+    gateway::event::Event,
+    id::{marker::GuildMarker, Id},
+};
 
 /// Retrieve the guild ID of an event if it took place in a guild.
 ///
@@ -16,7 +20,7 @@ use twilight_model::{channel::Channel, gateway::event::Event, id::GuildId};
 /// [`GuildChannel`]: twilight_model::channel::GuildChannel
 /// [`MessageDelete`]: twilight_model::gateway::payload::MessageDelete
 /// [`PrivateChannel`]: twilight_model::channel::PrivateChannel
-pub const fn guild_id(event: &Event) -> Option<GuildId> {
+pub const fn guild_id(event: &Event) -> Option<Id<GuildMarker>> {
     match event {
         Event::BanAdd(e) => Some(e.guild_id),
         Event::BanRemove(e) => Some(e.guild_id),
@@ -51,7 +55,7 @@ pub const fn guild_id(event: &Event) -> Option<GuildId> {
         Event::StageInstanceDelete(e) => Some(e.0.guild_id),
         Event::StageInstanceUpdate(e) => Some(e.0.guild_id),
         Event::ThreadCreate(e) => channel_guild_id(&e.0),
-        Event::ThreadDelete(e) => channel_guild_id(&e.0),
+        Event::ThreadDelete(e) => Some(e.guild_id),
         Event::ThreadListSync(e) => Some(e.guild_id),
         Event::ThreadMembersUpdate(e) => Some(e.guild_id),
         Event::ThreadUpdate(e) => channel_guild_id(&e.0),
@@ -88,7 +92,7 @@ pub const fn guild_id(event: &Event) -> Option<GuildId> {
 /// Retrieve the guild ID of a channel if it's a [`GuildChannel`].
 ///
 /// [`GuildChannel`]: twilight_model::channel::GuildChannel
-const fn channel_guild_id(channel: &Channel) -> Option<GuildId> {
+const fn channel_guild_id(channel: &Channel) -> Option<Id<GuildMarker>> {
     if let Channel::Guild(guild_channel) = channel {
         guild_channel.guild_id()
     } else {
