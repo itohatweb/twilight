@@ -2,6 +2,30 @@
 
 Changelog for `twilight-cache-inmemory`.
 
+## [0.8.6] - 2022-01-21
+
+### Changes
+
+Support `Interaction::{guild_locale, locale}` ([#1437] - [@itohatweb]).
+
+Support `ThreadMetadata::create_timestamp` ([#1478] - [@itohatweb]).
+
+### Fixes
+
+Presences are now properly stored in `guild_presences` ([#1459] - [@itohatweb]).
+
+[#1459]: https://github.com/twilight-rs/twilight/pull/1459
+[#1478]: https://github.com/twilight-rs/twilight/pull/1478
+
+## [0.8.5] - 2022-01-11
+
+### Fixes
+
+Downgrade `dashmap` to `4.0`, to prevent an issue with `Ref::value` and `dashmap
+5.0` ([#1434] - [@baptiste0928]).
+
+[#1434]: https://github.com/twilight-rs/twilight/pull/1434
+
 ## [0.8.4] - 2022-01-08
 
 ### Additions
@@ -553,12 +577,14 @@ Initial release.
 [@7596ff]: https://github.com/7596ff
 [@AEnterprise]: https://github.com/AEnterprise
 [@AsianIntel]: https://github.com/AsianIntel
+[@baptiste0928]: https://github.com/baptiste0928
 [@BlackHoleFox]: https://github.com/BlackHoleFox
 [@chamburr]: https://github.com/chamburr
 [@DusterTheFirst]: https://github.com/DusterTheFirst
 [@Erk-]: https://github.com/Erk-
 [@Gelbpunkt]: https://github.com/Gelbpunkt
 [@HTG-YT]: https://github.com/HTG-YT
+[@itohatweb]: https://github.com/itohatweb
 [@james7132]: https://github.com/james7132
 [@MaxOhn]: https://github.com/MaxOhn
 [@nickelc]: https://github.com/nickelc
@@ -583,6 +609,8 @@ Initial release.
 [#528]: https://github.com/twilight-rs/twilight/pull/528
 [#524]: https://github.com/twilight-rs/twilight/pull/524
 
+[0.8.6]: https://github.com/twilight-rs/twilight/releases/tag/cache-in-memory-0.8.6
+[0.8.5]: https://github.com/twilight-rs/twilight/releases/tag/cache-in-memory-0.8.5
 [0.8.4]: https://github.com/twilight-rs/twilight/releases/tag/cache-in-memory-0.8.4
 [0.8.3]: https://github.com/twilight-rs/twilight/releases/tag/cache-in-memory-0.8.3
 [0.8.2]: https://github.com/twilight-rs/twilight/releases/tag/cache-in-memory-0.8.2
