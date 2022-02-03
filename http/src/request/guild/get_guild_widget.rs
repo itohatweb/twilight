@@ -13,7 +13,7 @@ use twilight_model::{
 /// Get the guild widget.
 ///
 /// See [Discord Docs/Get Guild Widget].
-///
+///f
 /// [Discord Docs/Get Guild Widget]: https://discord.com/developers/docs/resources/guild#get-guild-widget
 #[must_use = "requests must be configured and executed"]
 pub struct GetGuildWidget<'a> {
