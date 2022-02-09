@@ -11,16 +11,18 @@ use twilight_model::{
     id::{marker::ApplicationMarker, Id},
 };
 use twilight_validate::command::{
-    description as validate_description, options as validate_options, CommandValidationError,
+    chat_input_name as validate_chat_input_name, description as validate_description,
+    options as validate_options, CommandValidationError,
 };
 
 /// Create a new chat input global command.
 ///
 /// The description must be between 1 and 100 characters in length. Creating a
 /// command with the same name as an already-existing global command will
-/// overwrite the old command. See [the discord docs] for more information.
+/// overwrite the old command. See
+/// [Discord Docs/Create Global Application Command].
 ///
-/// [the discord docs]: https://discord.com/developers/docs/interactions/application-commands#create-global-application-command
+/// [Discord Docs/Create Global Application Command]: https://discord.com/developers/docs/interactions/application-commands#create-global-application-command
 #[must_use = "requests must be configured and executed"]
 pub struct CreateGlobalChatInputCommand<'a> {
     application_id: Id<ApplicationMarker>,
@@ -40,6 +42,8 @@ impl<'a> CreateGlobalChatInputCommand<'a> {
     ) -> Result<Self, CommandValidationError> {
         validate_description(&description)?;
 
+        validate_chat_input_name(name)?;
+
         Ok(Self {
             application_id,
             default_permission: None,
@@ -54,7 +58,7 @@ impl<'a> CreateGlobalChatInputCommand<'a> {
     ///
     /// Required command options must be added before optional options.
     ///
-    /// Errors
+    /// # Errors
     ///
     /// Returns an error of type [`OptionsRequiredFirst`] if a required option
     /// was added after an optional option. The problem option's index is

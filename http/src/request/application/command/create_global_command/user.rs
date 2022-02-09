@@ -10,13 +10,15 @@ use twilight_model::{
     application::command::{Command, CommandType},
     id::{marker::ApplicationMarker, Id},
 };
+use twilight_validate::command::{name as validate_name, CommandValidationError};
 
 /// Create a new user global command.
 ///
 /// Creating a command with the same name as an already-existing global command
-/// will overwrite the old command. See [the discord docs] for more information.
+/// will overwrite the old command. See
+/// [Discord Docs/Create Global Application Command].
 ///
-/// [the discord docs]: https://discord.com/developers/docs/interactions/application-commands#create-global-application-command
+/// [Discord Docs/Create Global Application Command]: https://discord.com/developers/docs/interactions/application-commands#create-global-application-command
 #[must_use = "requests must be configured and executed"]
 pub struct CreateGlobalUserCommand<'a> {
     application_id: Id<ApplicationMarker>,
@@ -26,17 +28,19 @@ pub struct CreateGlobalUserCommand<'a> {
 }
 
 impl<'a> CreateGlobalUserCommand<'a> {
-    pub(crate) const fn new(
+    pub(crate) fn new(
         http: &'a Client,
         application_id: Id<ApplicationMarker>,
         name: &'a str,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, CommandValidationError> {
+        validate_name(name)?;
+
+        Ok(Self {
             application_id,
             default_permission: None,
             http,
             name,
-        }
+        })
     }
 
     /// Whether the command is enabled by default when the app is added to a guild.

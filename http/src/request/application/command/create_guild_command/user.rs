@@ -13,14 +13,15 @@ use twilight_model::{
         Id,
     },
 };
+use twilight_validate::command::{name as validate_name, CommandValidationError};
 
 /// Create a user command in a guild.
 ///
 /// Creating a guild command with the same name as an already-existing guild
-/// command in the same guild will overwrite the old command. See [the discord
-/// docs] for more information.
+/// command in the same guild will overwrite the old command. See
+/// [Discord Docs/Create Guild Application Command].
 ///
-/// [the discord docs]: https://discord.com/developers/docs/interactions/application-commands#create-guild-application-command
+/// [Discord Docs/Create Guild Application Command]: https://discord.com/developers/docs/interactions/application-commands#create-guild-application-command
 #[must_use = "requests must be configured and executed"]
 pub struct CreateGuildUserCommand<'a> {
     application_id: Id<ApplicationMarker>,
@@ -31,19 +32,21 @@ pub struct CreateGuildUserCommand<'a> {
 }
 
 impl<'a> CreateGuildUserCommand<'a> {
-    pub(crate) const fn new(
+    pub(crate) fn new(
         http: &'a Client,
         application_id: Id<ApplicationMarker>,
         guild_id: Id<GuildMarker>,
         name: &'a str,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, CommandValidationError> {
+        validate_name(name)?;
+
+        Ok(Self {
             application_id,
             default_permission: None,
             guild_id,
             http,
             name,
-        }
+        })
     }
 
     /// Whether the command is enabled by default when the app is added to a guild.

@@ -28,11 +28,20 @@ pub struct MessageComponentInteraction {
     pub data: MessageComponentInteractionData,
     /// ID of the guild the interaction was triggered from.
     pub guild_id: Option<Id<GuildMarker>>,
+    /// Guild's preferred locale.
+    ///
+    /// Present when the command is used in a guild.
+    ///
+    /// Defaults to `en-US`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guild_locale: Option<String>,
     /// ID of the interaction.
     pub id: Id<InteractionMarker>,
     /// Type of the interaction.
     #[serde(rename = "type")]
     pub kind: InteractionType,
+    /// Selected language of the user who triggered the interaction.
+    pub locale: String,
     /// Member that triggered the interaction.
     ///
     /// Present when the command is used in a guild.
@@ -40,7 +49,7 @@ pub struct MessageComponentInteraction {
     pub member: Option<PartialMember>,
     /// Message object for the message this button belongs to.
     ///
-    /// This is currently *not* validated by the discord API and may be spoofed
+    /// This is currently *not* validated by the Discord API and may be spoofed
     /// by malicious users.
     pub message: Message,
     /// Token of the interaction.
@@ -149,8 +158,10 @@ mod tests {
                 values: Vec::from(["bar".to_owned()]),
             },
             guild_id: Some(Id::new(3)),
+            guild_locale: None,
             id: Id::new(4),
             kind: InteractionType::MessageComponent,
+            locale: "en-GB".to_owned(),
             member: Some(PartialMember {
                 avatar: None,
                 communication_disabled_until: None,

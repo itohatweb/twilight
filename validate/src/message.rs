@@ -4,19 +4,26 @@
 
 use crate::{
     component::{ComponentValidationErrorType, COMPONENT_COUNT},
-    embed::EmbedValidationErrorType,
+    embed::{chars as embed_chars, EmbedValidationErrorType, EMBED_TOTAL_LENGTH},
 };
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
-use twilight_model::{application::component::Component, channel::embed::Embed};
+use twilight_model::{
+    application::component::Component,
+    channel::embed::Embed,
+    id::{marker::StickerMarker, Id},
+};
 
 /// Maximum number of embeds that a message may have.
 pub const EMBED_COUNT_LIMIT: usize = 10;
 
 /// Maximum length of message content.
 pub const MESSAGE_CONTENT_LENGTH_MAX: usize = 2000;
+
+/// Maximum amount of stickers.
+pub const STICKER_MAX: usize = 3;
 
 /// A message is not valid.
 #[derive(Debug)]
@@ -72,6 +79,13 @@ impl Display for MessageValidationError {
 
                 f.write_str(" is invalid")
             }
+            MessageValidationErrorType::StickersInvalid { len } => {
+                f.write_str("amount of stickers provided is ")?;
+                Display::fmt(len, f)?;
+                f.write_str(" but it must be at most ")?;
+
+                Display::fmt(&STICKER_MAX, f)
+            }
             MessageValidationErrorType::TooManyEmbeds { .. } => {
                 f.write_str("message has too many embeds")
             }
@@ -104,6 +118,11 @@ pub enum MessageValidationErrorType {
         idx: usize,
         /// Additional details about the validation failure type.
         kind: EmbedValidationErrorType,
+    },
+    /// Amount of stickers provided is invalid.
+    StickersInvalid {
+        /// Invalid length.
+        len: usize,
     },
     /// Too many embeds were provided.
     ///
@@ -184,7 +203,20 @@ pub fn embeds(embeds: &[Embed]) -> Result<(), MessageValidationError> {
             source: None,
         })
     } else {
+        let mut chars = 0;
         for (idx, embed) in embeds.iter().enumerate() {
+            chars += embed_chars(embed);
+
+            if chars > EMBED_TOTAL_LENGTH {
+                return Err(MessageValidationError {
+                    kind: MessageValidationErrorType::EmbedInvalid {
+                        idx,
+                        kind: EmbedValidationErrorType::EmbedTooLarge { chars },
+                    },
+                    source: None,
+                });
+            }
+
             crate::embed::embed(embed).map_err(|source| {
                 let (kind, source) = source.into_parts();
 
@@ -196,6 +228,30 @@ pub fn embeds(embeds: &[Embed]) -> Result<(), MessageValidationError> {
         }
 
         Ok(())
+    }
+}
+
+/// Ensure that the amount of stickers in a message is correct.
+///
+/// There must be at most [`STICKER_MAX`] stickers. This is based on [this
+/// documentation entry].
+///
+/// # Errors
+///
+/// Returns an error of type [`StickersInvalid`] if the length is invalid.
+///
+/// [`StickersInvalid`]: MessageValidationErrorType::StickersInvalid
+/// [this documentation entry]: https://discord.com/developers/docs/resources/channel#create-message-jsonform-params
+pub fn sticker_ids(sticker_ids: &[Id<StickerMarker>]) -> Result<(), MessageValidationError> {
+    let len = sticker_ids.len();
+
+    if len <= STICKER_MAX {
+        Ok(())
+    } else {
+        Err(MessageValidationError {
+            kind: MessageValidationErrorType::StickersInvalid { len },
+            source: None,
+        })
     }
 }
 

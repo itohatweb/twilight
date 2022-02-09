@@ -14,17 +14,18 @@ use twilight_model::{
     },
 };
 use twilight_validate::command::{
-    description as validate_description, options as validate_options, CommandValidationError,
+    chat_input_name as validate_chat_input_name, description as validate_description,
+    options as validate_options, CommandValidationError,
 };
 
 /// Create a chat input command in a guild.
 ///
 /// The description must be between 1 and 100 characters in length. Creating a
 /// guild command with the same name as an already-existing guild command in the
-/// same guild will overwrite the old command. See [the discord docs] for more
-/// information.
+/// same guild will overwrite the old command. See
+/// [Discord Docs/Create Global Application Command].
 ///
-/// [the discord docs]: https://discord.com/developers/docs/interactions/application-commands#create-guild-application-command
+/// [Discord Docs/Create Global Application Command]: https://discord.com/developers/docs/interactions/application-commands#create-guild-application-command
 #[must_use = "requests must be configured and executed"]
 pub struct CreateGuildChatInputCommand<'a> {
     application_id: Id<ApplicationMarker>,
@@ -45,6 +46,8 @@ impl<'a> CreateGuildChatInputCommand<'a> {
         description: &'a str,
     ) -> Result<Self, CommandValidationError> {
         validate_description(&description)?;
+
+        validate_chat_input_name(name)?;
 
         Ok(Self {
             application_id,

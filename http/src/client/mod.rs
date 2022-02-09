@@ -53,8 +53,12 @@ use crate::{
             CreateGuild, CreateGuildChannel, CreateGuildPrune, DeleteGuild, GetActiveThreads,
             GetAuditLog, GetGuild, GetGuildChannels, GetGuildInvites, GetGuildPreview,
             GetGuildPruneCount, GetGuildVanityUrl, GetGuildVoiceRegions, GetGuildWebhooks,
-            GetGuildWelcomeScreen, GetGuildWidget, UpdateCurrentMember, UpdateCurrentUserNick,
-            UpdateGuild, UpdateGuildChannelPositions, UpdateGuildWelcomeScreen, UpdateGuildWidget,
+            GetGuildWelcomeScreen, GetGuildWidget, UpdateCurrentMember, UpdateGuild,
+            UpdateGuildChannelPositions, UpdateGuildWelcomeScreen, UpdateGuildWidget,
+        },
+        scheduled_event::{
+            CreateGuildScheduledEvent, DeleteGuildScheduledEvent, GetGuildScheduledEvent,
+            GetGuildScheduledEventUsers, GetGuildScheduledEvents, UpdateGuildScheduledEvent,
         },
         sticker::{GetNitroStickerPacks, GetSticker},
         template::{
@@ -92,7 +96,8 @@ use twilight_model::{
     id::{
         marker::{
             ApplicationMarker, ChannelMarker, EmojiMarker, GuildMarker, IntegrationMarker,
-            MessageMarker, RoleMarker, StickerMarker, UserMarker, WebhookMarker,
+            MessageMarker, RoleMarker, ScheduledEventMarker, StickerMarker, UserMarker,
+            WebhookMarker,
         },
         Id,
     },
@@ -249,7 +254,7 @@ impl Client {
     /// // Later in the process...
     /// let commands = client
     ///     .interaction(application_id)
-    ///     .get_global_commands()
+    ///     .global_commands()
     ///     .exec()
     ///     .await?
     ///     .models()
@@ -267,9 +272,10 @@ impl Client {
         InteractionClient::new(self, application_id)
     }
 
-    /// Get the default [`AllowedMentions`] for sent messages.
-    pub fn default_allowed_mentions(&self) -> Option<AllowedMentions> {
-        self.default_allowed_mentions.clone()
+    /// Get an immutable reference to the default [`AllowedMentions`] for sent
+    /// messages.
+    pub const fn default_allowed_mentions(&self) -> Option<&AllowedMentions> {
+        self.default_allowed_mentions.as_ref()
     }
 
     /// Get the Ratelimiter used by the client internally.
@@ -621,17 +627,6 @@ impl Client {
         GetCurrentUserGuilds::new(self)
     }
 
-    /// Changes the user's nickname in a guild.
-    #[allow(deprecated)]
-    #[deprecated(note = "use update_current_member instead", since = "0.7.2")]
-    pub const fn update_current_user_nick<'a>(
-        &'a self,
-        guild_id: Id<GuildMarker>,
-        nick: &'a str,
-    ) -> UpdateCurrentUserNick<'a> {
-        UpdateCurrentUserNick::new(self, guild_id, nick)
-    }
-
     /// Get the emojis for a guild, by the guild's id.
     ///
     /// # Examples
@@ -685,11 +680,11 @@ impl Client {
 
     /// Create an emoji in a guild.
     ///
-    /// The emoji must be a Data URI, in the form of `data:image/{type};base64,{data}` where
-    /// `{type}` is the image MIME type and `{data}` is the base64-encoded image.  Refer to [the
-    /// discord docs] for more information about image data.
+    /// The emoji must be a Data URI, in the form of
+    /// `data:image/{type};base64,{data}` where `{type}` is the image MIME type
+    /// and `{data}` is the base64-encoded image. See [Discord Docs/Image Data].
     ///
-    /// [the discord docs]: https://discord.com/developers/docs/reference#image-data
+    /// [Discord Docs/Image Data]: https://discord.com/developers/docs/reference#image-data
     pub const fn create_emoji<'a>(
         &'a self,
         guild_id: Id<GuildMarker>,
@@ -782,9 +777,9 @@ impl Client {
 
     /// Update a guild.
     ///
-    /// All endpoints are optional. Refer to [the discord docs] for more information.
+    /// All endpoints are optional. See [Discord Docs/Modify Guild].
     ///
-    /// [the discord docs]: https://discord.com/developers/docs/resources/guild#modify-guild
+    /// [Discord Docs/Modify Guild]: https://discord.com/developers/docs/resources/guild#modify-guild
     pub const fn update_guild(&self, guild_id: Id<GuildMarker>) -> UpdateGuild<'_> {
         UpdateGuild::new(self, guild_id)
     }
@@ -842,9 +837,9 @@ impl Client {
 
     /// Get the guild widget.
     ///
-    /// Refer to [the discord docs] for more information.
+    /// See [Discord Docs/Get Guild Widget].
     ///
-    /// [the discord docs]: https://discord.com/developers/docs/resources/guild#get-guild-widget
+    /// [Discord Docs/Get Guild Widget]: https://discord.com/developers/docs/resources/guild#get-guild-widget
     pub const fn guild_widget(&self, guild_id: Id<GuildMarker>) -> GetGuildWidget<'_> {
         GetGuildWidget::new(self, guild_id)
     }
@@ -961,8 +956,7 @@ impl Client {
     /// Add a user to a guild.
     ///
     /// An access token for the user with `guilds.join` scope is required. All
-    /// other fields are optional. Refer to [the discord docs] for more
-    /// information.
+    /// other fields are optional. See [Discord Docs/Add Guild Member].
     ///
     /// # Errors
     ///
@@ -970,7 +964,7 @@ impl Client {
     /// nickname is too short or too long.
     ///
     /// [`ValidationErrorType::Nickname`]: twilight_validate::request::ValidationErrorType::Nickname
-    /// [the discord docs]: https://discord.com/developers/docs/resources/guild#add-guild-member
+    /// [Discord Docs/Add Guild Member]: https://discord.com/developers/docs/resources/guild#add-guild-member
     pub const fn add_guild_member<'a>(
         &'a self,
         guild_id: Id<GuildMarker>,
@@ -991,7 +985,7 @@ impl Client {
 
     /// Update a guild member.
     ///
-    /// All fields are optional. Refer to [the discord docs] for more information.
+    /// All fields are optional. See [Discord Docs/Modify Guild Member].
     ///
     /// # Examples
     ///
@@ -1022,7 +1016,7 @@ impl Client {
     /// nickname length is too short or too long.
     ///
     /// [`ValidationErrorType::Nickname`]: twilight_validate::request::ValidationErrorType::Nickname
-    /// [the discord docs]: https://discord.com/developers/docs/resources/guild#modify-guild-member
+    /// [Discord Docs/Modify Guild Member]: https://discord.com/developers/docs/resources/guild#modify-guild-member
     pub const fn update_guild_member(
         &self,
         guild_id: Id<GuildMarker>,
@@ -1096,9 +1090,9 @@ impl Client {
 
     /// Begin a guild prune.
     ///
-    /// Refer to [the discord docs] for more information.
+    /// See [Discord Docs/Begin Guild Prune].
     ///
-    /// [the discord docs]: https://discord.com/developers/docs/resources/guild#begin-guild-prune
+    /// [Discord Docs/Begin Guild Prune]: https://discord.com/developers/docs/resources/guild#begin-guild-prune
     pub const fn create_guild_prune(&self, guild_id: Id<GuildMarker>) -> CreateGuildPrune<'_> {
         CreateGuildPrune::new(self, guild_id)
     }
@@ -1219,16 +1213,18 @@ impl Client {
 
     /// Send a message to a channel.
     ///
+    /// The message must include at least one of [`attachments`], [`content`],
+    /// [`embeds`], or [`sticker_ids`].
+    ///
     /// # Example
     ///
     /// ```no_run
-    /// # use twilight_http::Client;
-    /// # use twilight_model::id::Id;
-    /// #
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let client = Client::new("my token".to_owned());
-    /// #
+    /// # #[tokio::main] async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use twilight_http::Client;
+    /// use twilight_model::id::Id;
+    ///
+    /// let client = Client::new("my token".to_owned());
+    ///
     /// let channel_id = Id::new(123);
     /// let message = client
     ///     .create_message(channel_id)
@@ -1239,19 +1235,10 @@ impl Client {
     /// # Ok(()) }
     /// ```
     ///
-    /// # Errors
-    ///
-    /// The method [`content`] returns an error of type
-    /// [`MessageValidationErrorType::ContentInvalid`] if the content is over 2000
-    /// UTF-16 characters.
-    ///
-    /// The method [`embeds`] returns an error of type
-    /// [`MessageValidationErrorType::EmbedInvalid`] if the embed is invalid.
-    ///
-    /// [`MessageValidationErrorType::ContentInvalid`]: twilight_validate::message::MessageValidationErrorType::ContentInvalid
-    /// [`MessageValidationErrorType::EmbedInvalid`]: twilight_validate::message::MessageValidationErrorType::EmbedInvalid
-    /// [`content`]: crate::request::channel::message::create_message::CreateMessage::content
-    /// [`embeds`]: crate::request::channel::message::create_message::CreateMessage::embeds
+    /// [`attachments`]: CreateMessage::attachments
+    /// [`content`]: CreateMessage::content
+    /// [`embeds`]: CreateMessage::embeds
+    /// [`sticker_ids`]: CreateMessage::sticker_ids
     pub const fn create_message(&self, channel_id: Id<ChannelMarker>) -> CreateMessage<'_> {
         CreateMessage::new(self, channel_id)
     }
@@ -1267,11 +1254,12 @@ impl Client {
 
     /// Delete messages by [`Id<ChannelMarker>`] and Vec<[`Id<MessageMarker>`]>.
     ///
-    /// The vec count can be between 2 and 100. If the supplied [`Id<MessageMarker>`]s are invalid, they
-    /// still count towards the lower and upper limits. This method will not delete messages older
-    /// than two weeks. Refer to [the discord docs] for more information.
+    /// The vec count can be between 2 and 100. If the supplied
+    /// [`Id<MessageMarker>`]s are invalid, they still count towards the lower
+    /// and upper limits. This method will not delete messages older than two
+    /// weeks. See [Discord Docs/Bulk Delete Messages].
     ///
-    /// [the discord docs]: https://discord.com/developers/docs/resources/channel#bulk-delete-messages
+    /// [Discord Docs/Bulk Delete Messages]: https://discord.com/developers/docs/resources/channel#bulk-delete-messages
     pub const fn delete_messages<'a>(
         &'a self,
         channel_id: Id<ChannelMarker>,
@@ -1282,20 +1270,20 @@ impl Client {
 
     /// Update a message by [`Id<ChannelMarker>`] and [`Id<MessageMarker>`].
     ///
-    /// You can pass `None` to any of the methods to remove the associated field.
-    /// For example, if you have a message with an embed you want to remove, you can
-    /// use `.[embed](None)` to remove the embed.
+    /// You can pass [`None`] to any of the methods to remove the associated
+    /// field. Pass [`None`] to [`content`] to remove the content. You must
+    /// ensure that the message still contains at least one of [`attachments`],
+    /// [`content`], [`embeds`], or stickers.
     ///
     /// # Examples
     ///
     /// Replace the content with `"test update"`:
     ///
     /// ```no_run
+    /// # #[tokio::main] async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use twilight_http::Client;
     /// use twilight_model::id::Id;
     ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("my token".to_owned());
     /// client.update_message(Id::new(1), Id::new(2))
     ///     .content(Some("test update"))?
@@ -1320,7 +1308,9 @@ impl Client {
     /// # Ok(()) }
     /// ```
     ///
-    /// [embed]: Self::embed
+    /// [`attachments`]: UpdateMessage::attachments
+    /// [`content`]: UpdateMessage::content
+    /// [`embeds`]: UpdateMessage::embeds
     pub const fn update_message(
         &self,
         channel_id: Id<ChannelMarker>,
@@ -1889,21 +1879,21 @@ impl Client {
         UpdateWebhookWithToken::new(self, webhook_id, token)
     }
 
-    /// Executes a webhook, sending a message to its channel.
+    /// Execute a webhook, sending a message to its channel.
     ///
-    /// You can only specify one of [`content`], [`embeds`], or [`files`].
+    /// The message must include at least one of [`attachments`], [`content`],
+    /// or [`embeds`].
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// # use twilight_http::Client;
-    /// # use twilight_model::id::Id;
-    /// #
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let client = Client::new("my token".to_owned());
+    /// # #[tokio::main] async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use twilight_http::Client;
+    /// use twilight_model::id::Id;
+    ///
+    /// let client = Client::new("my token".to_owned());
     /// let id = Id::new(432);
-    /// #
+    ///
     /// let webhook = client
     ///     .execute_webhook(id, "webhook token")
     ///     .content("Pinkie...")?
@@ -1912,9 +1902,9 @@ impl Client {
     /// # Ok(()) }
     /// ```
     ///
-    /// [`content`]: crate::request::channel::webhook::ExecuteWebhook::content
-    /// [`embeds`]: crate::request::channel::webhook::ExecuteWebhook::embeds
-    /// [`files`]: crate::request::channel::webhook::ExecuteWebhook::files
+    /// [`attachments`]: ExecuteWebhook::attachments
+    /// [`content`]: ExecuteWebhook::content
+    /// [`embeds`]: ExecuteWebhook::embeds
     pub const fn execute_webhook<'a>(
         &'a self,
         webhook_id: Id<WebhookMarker>,
@@ -1935,21 +1925,29 @@ impl Client {
 
     /// Update a message executed by a webhook.
     ///
+    /// You can pass [`None`] to any of the methods to remove the associated
+    /// field. Pass [`None`] to [`content`] to remove the content. You must
+    /// ensure that the message still contains at least one of [`attachments`],
+    /// [`content`], or [`embeds`].
+    ///
     /// # Examples
     ///
     /// ```no_run
-    /// # use twilight_http::Client;
+    /// # #[tokio::main] async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use twilight_http::Client;
     /// use twilight_model::id::Id;
     ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let client = Client::new("token".to_owned());
+    /// let client = Client::new("token".to_owned());
     /// client.update_webhook_message(Id::new(1), "token here", Id::new(2))
     ///     .content(Some("new message content"))?
     ///     .exec()
     ///     .await?;
     /// # Ok(()) }
     /// ```
+    ///
+    /// [`attachments`]: UpdateWebhookMessage::attachments
+    /// [`content`]: UpdateWebhookMessage::content
+    /// [`embeds`]: UpdateWebhookMessage::embeds
     pub const fn update_webhook_message<'a>(
         &'a self,
         webhook_id: Id<WebhookMarker>,
@@ -1983,6 +1981,164 @@ impl Client {
         message_id: Id<MessageMarker>,
     ) -> DeleteWebhookMessage<'a> {
         DeleteWebhookMessage::new(self, webhook_id, token, message_id)
+    }
+
+    /// Delete a scheduled event in a guild.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use twilight_http::Client;
+    /// # use twilight_model::id::Id;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("token".to_owned());
+    /// let guild_id = Id::new(1);
+    /// let scheduled_event_id = Id::new(2);
+    ///
+    /// client
+    ///     .delete_guild_scheduled_event(guild_id, scheduled_event_id)
+    ///     .exec()
+    ///     .await?;
+    /// # Ok(()) }
+    /// ```
+    pub const fn delete_guild_scheduled_event(
+        &self,
+        guild_id: Id<GuildMarker>,
+        scheduled_event_id: Id<ScheduledEventMarker>,
+    ) -> DeleteGuildScheduledEvent<'_> {
+        DeleteGuildScheduledEvent::new(self, guild_id, scheduled_event_id)
+    }
+
+    /// Create a scheduled event in a guild.
+    ///
+    /// Once a guild is selected, you must choose one of three event types to
+    /// create. The request builders will ensure you provide the correct data to
+    /// Discord. See [Discord Docs/Create Guild Scheduled Event].
+    ///
+    /// The name must be between 1 and 100 characters in length. For external
+    /// events, the location must be between 1 and 100 characters in length.
+    ///
+    /// # Examples
+    ///
+    /// Create an event in a stage instance:
+    ///
+    /// ```no_run
+    /// # use twilight_http::Client;
+    /// use twilight_model::{datetime::Timestamp, id::Id};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("token".to_owned());
+    /// let guild_id = Id::new(1);
+    /// let channel_id = Id::new(2);
+    /// let garfield_start_time = Timestamp::parse("2022-01-01T14:00:00+00:00")?;
+    ///
+    /// client
+    ///     .create_guild_scheduled_event(guild_id)
+    ///     .stage_instance(
+    ///         channel_id,
+    ///         "Garfield Appreciation Hour",
+    ///         &garfield_start_time
+    ///     )?
+    ///     .description("Discuss: How important is Garfield to You?")?
+    ///     .exec()
+    ///     .await?;
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// Create an external event:
+    ///
+    /// ```no_run
+    /// # use twilight_http::Client;
+    /// use twilight_model::{datetime::Timestamp, id::Id};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("token".to_owned());
+    /// let guild_id = Id::new(1);
+    /// let garfield_con_start_time = Timestamp::parse("2022-01-04T08:00:00+00:00")?;
+    /// let garfield_con_end_time = Timestamp::parse("2022-01-06T17:00:00+00:00")?;
+    ///
+    /// client
+    ///     .create_guild_scheduled_event(guild_id)
+    ///     .external(
+    ///         "Garfield Con 2022",
+    ///         "Baltimore Convention Center",
+    ///         &garfield_con_start_time,
+    ///         &garfield_con_end_time
+    ///     )?
+    ///     .description("In a spiritual successor to BronyCon, Garfield fans \
+    /// from around the globe celebrate all things related to the loveable cat.")?
+    ///     .exec()
+    ///     .await?;
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// [Discord Docs/Create Guild Scheduled Event]: https://discord.com/developers/docs/resources/guild-scheduled-event#create-guild-scheduled-event
+    pub const fn create_guild_scheduled_event(
+        &self,
+        guild_id: Id<GuildMarker>,
+    ) -> CreateGuildScheduledEvent<'_> {
+        CreateGuildScheduledEvent::new(self, guild_id)
+    }
+
+    /// Get a scheduled event in a guild.
+    pub const fn guild_scheduled_event(
+        &self,
+        guild_id: Id<GuildMarker>,
+        scheduled_event_id: Id<ScheduledEventMarker>,
+    ) -> GetGuildScheduledEvent<'_> {
+        GetGuildScheduledEvent::new(self, guild_id, scheduled_event_id)
+    }
+
+    /// Get a list of users subscribed to a scheduled event.
+    ///
+    /// Users are returned in ascending order by `user_id`. [`before`] and
+    /// [`after`] both take a user id. If both are specified, only [`before`] is
+    /// respected. The default [`limit`] is 100. See
+    /// [Discord Docs/Get Guild Scheduled Event Users].
+    ///
+    /// [`after`]: GetGuildScheduledEventUsers::after
+    /// [`before`]: GetGuildScheduledEventUsers::before
+    /// [`limit`]: GetGuildScheduledEventUsers::limit
+    /// [Discord Docs/Get Guild Scheduled Event Users]: https://discord.com/developers/docs/resources/guild-scheduled-event#get-guild-scheduled-event-users
+    pub const fn guild_scheduled_event_users(
+        &self,
+        guild_id: Id<GuildMarker>,
+        scheduled_event_id: Id<ScheduledEventMarker>,
+    ) -> GetGuildScheduledEventUsers<'_> {
+        GetGuildScheduledEventUsers::new(self, guild_id, scheduled_event_id)
+    }
+
+    /// Get a list of scheduled events in a guild.
+    pub const fn guild_scheduled_events(
+        &self,
+        guild_id: Id<GuildMarker>,
+    ) -> GetGuildScheduledEvents<'_> {
+        GetGuildScheduledEvents::new(self, guild_id)
+    }
+
+    /// Update a scheduled event in a guild.
+    ///
+    /// This endpoint supports changing the type of event. When changing the
+    /// entity type to either [`EntityType::StageInstance`] or
+    /// [`EntityType::Voice`], an [`Id<ChannelMarker>`] must be provided if it
+    /// does not already exist.
+    ///
+    /// When changing the entity type to [`EntityType::External`], the
+    /// `channel_id` field is cleared and the [`channel_id`] method has no
+    /// effect. Additionally, you must set a location with [`location`].
+    ///
+    /// [`EntityType::External`]: twilight_model::scheduled_event::EntityType::External
+    /// [`EntityType::StageInstance`]: twilight_model::scheduled_event::EntityType::StageInstance
+    /// [`EntityType::Voice`]: twilight_model::scheduled_event::EntityType::Voice
+    /// [`channel_id`]: UpdateGuildScheduledEvent::channel_id
+    /// [`location`]: UpdateGuildScheduledEvent::location
+    pub const fn update_guild_scheduled_event(
+        &self,
+        guild_id: Id<GuildMarker>,
+        scheduled_event_id: Id<ScheduledEventMarker>,
+    ) -> UpdateGuildScheduledEvent<'_> {
+        UpdateGuildScheduledEvent::new(self, guild_id, scheduled_event_id)
     }
 
     /// Returns a single sticker by its ID.
@@ -2231,9 +2387,7 @@ impl Client {
         #[cfg(feature = "tracing")]
         tracing::debug!("URL: {:?}", url);
 
-        let mut builder = hyper::Request::builder()
-            .method(method.into_http())
-            .uri(&url);
+        let mut builder = hyper::Request::builder().method(method.to_http()).uri(&url);
 
         if use_authorization_token {
             if let Some(token) = &self.token {
@@ -2299,9 +2453,11 @@ impl Client {
 
         let req = if let Some(form) = form {
             let form_bytes = form.build();
+
             if let Some(headers) = builder.headers_mut() {
                 headers.insert(CONTENT_LENGTH, HeaderValue::from(form_bytes.len()));
             };
+
             builder
                 .body(Body::from(form_bytes))
                 .map_err(|source| Error {
